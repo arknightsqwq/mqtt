@@ -15,6 +15,17 @@
         <el-form-item label="设备描述">
           <el-input v-model="f.device_desc" type="textarea" :rows="2" placeholder="安装位置、型号等（可选）" />
         </el-form-item>
+        <el-form-item label="配置模板">
+          <el-input v-model="f.config_text" type="textarea" :rows="6"
+            placeholder='JSON 格式，定义用户前端「配置页」的表单字段，例如:
+{
+  "report_interval": {"label": "上报间隔", "type": "number", "unit": "秒", "default": 30},
+  "alarm_threshold": {"label": "告警阈值", "type": "number", "unit": "°C", "default": 80},
+  "led_mode":        {"label": "LED 模式", "type": "select", "options": ["常亮","闪烁","关闭"]}
+}'
+          />
+          <p v-if="configError" style="color:#F56C6C;font-size:12px;margin-top:4px">{{ configError }}</p>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" native-type="submit" :loading="ld">
             <el-icon><CirclePlus /></el-icon> 注册
@@ -64,7 +75,8 @@ import type { FormInstance, FormRules } from 'element-plus'
 const fr = ref<FormInstance>()
 const ld = ref(false)
 const bld = ref(false)
-const f = reactive({ device_id: '', device_name: '', device_desc: '' })
+const f = reactive({ device_id: '', device_name: '', device_desc: '', config_text: '' })
+const configError = ref('')
 const r: FormRules = {
   device_id: [{ required: true, message: '请输入设备ID' }],
   device_name: [{ required: true, message: '请输入设备名称' }],
@@ -73,11 +85,18 @@ const r: FormRules = {
 // ── 单个注册 ──
 async function reg() {
   if (!await fr.value?.validate().catch(() => false)) return
+  // 校验 config_text 是否为合法 JSON
+  let configJson: any = null
+  configError.value = ''
+  if (f.config_text.trim()) {
+    try { configJson = JSON.parse(f.config_text.trim()) }
+    catch { configError.value = '配置模板 JSON 格式错误'; return }
+  }
   ld.value = true
   try {
-    await registerDevice({ device_id: f.device_id, device_name: f.device_name, device_desc: f.device_desc })
+    await registerDevice({ device_id: f.device_id, device_name: f.device_name, device_desc: f.device_desc, config_json: configJson })
     ElMessage.success('注册成功')
-    f.device_id = ''; f.device_name = ''; f.device_desc = ''
+    f.device_id = ''; f.device_name = ''; f.device_desc = ''; f.config_text = ''
     fr.value?.resetFields()
   } catch {} finally { ld.value = false }
 }

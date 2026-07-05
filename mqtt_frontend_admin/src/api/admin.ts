@@ -19,11 +19,14 @@ export function toggleUserStatus(data: { user_id: string; is_disabled: boolean }
 export function listDevices(): Promise<ApiResponse<{ devices: DeviceInfo[] }>> {
   return http.get('/admin/devices')
 }
-export function registerDevice(data: { device_id: string; device_name: string; device_desc?: string }): Promise<ApiResponse> {
+export function registerDevice(data: { device_id: string; device_name: string; device_desc?: string; config_json?: any }): Promise<ApiResponse> {
   return http.post('/device/register', data)
 }
 export function deleteDevice(deviceId: string): Promise<ApiResponse> {
   return http.delete(`/device/${deviceId}`)
+}
+export function updateDeviceConfig(deviceId: string, configJson: any): Promise<ApiResponse> {
+  return http.put(`/admin/device/${deviceId}/config`, configJson)
 }
 export function queryLogs(params: { page?: number; page_size?: number; user_id?: string; action?: string }): Promise<ApiResponse<{ list: LogEntry[]; total: number }>> {
   return http.get('/admin/logs', { params })

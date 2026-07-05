@@ -31,7 +31,7 @@ import paho.mqtt.client as mqtt
 # ═══════════════════════════════════════
 # 配置
 # ═══════════════════════════════════════
-EMQX_HOST = "192.168.5.4"
+EMQX_HOST = "cn-xy.starryfrp.com"
 EMQX_PORT = 1883
 
 # 设备独立凭证：{device_id: password}
@@ -45,34 +45,42 @@ DEVICE_CREDENTIALS = {
 # 默认模拟设备列表（设备ID → 设备类型 + 模拟参数）
 DEFAULT_DEVICES = {
     "device_001": {
-        "name": "温度传感器",
-        "type": "temperature",
+        "name": "智能头盔-1号",
+        "type": "helmet",
+        "gps_latitude": 38.88489,
+        "gps_longitude": 121.52349,
         "fields": {
-            "temperature": {"base": 25.0, "noise": 3.0, "drift_period": 60},
-            "humidity":    {"base": 55.0, "noise": 8.0, "drift_period": 120},
+            "temperature": {"base": 28.0, "noise": 2.0, "drift_period": 60},
+            "humidity":    {"base": 65.0, "noise": 5.0, "drift_period": 120},
             "battery":     {"base": 85.0, "noise": 0.5, "drift_period": 3600},
-            "rssi":        {"base": -55.0, "noise": 5.0, "drift_period": 0},
+            "lux":         {"base": 450.0, "noise": 50.0, "drift_period": 30},
+            "mag":         {"base": 1.02, "noise": 0.05, "drift_period": 0},
         },
     },
     "device_002": {
-        "name": "湿度传感器",
-        "type": "humidity",
+        "name": "智能头盔-2号",
+        "type": "helmet",
+        "gps_latitude": 38.88600,
+        "gps_longitude": 121.52800,
         "fields": {
-            "temperature": {"base": 22.0, "noise": 2.0, "drift_period": 45},
-            "humidity":    {"base": 70.0, "noise": 5.0, "drift_period": 90},
-            "pressure":    {"base": 1013.0, "noise": 2.0, "drift_period": 30},
+            "temperature": {"base": 27.0, "noise": 1.5, "drift_period": 50},
+            "humidity":    {"base": 60.0, "noise": 6.0, "drift_period": 100},
             "battery":     {"base": 72.0, "noise": 0.3, "drift_period": 3600},
+            "lux":         {"base": 380.0, "noise": 40.0, "drift_period": 25},
+            "mag":         {"base": 0.98, "noise": 0.04, "drift_period": 0},
         },
     },
     "device_003": {
-        "name": "空气质量监测器",
-        "type": "air_quality",
+        "name": "智能头盔-3号",
+        "type": "helmet",
+        "gps_latitude": 38.88250,
+        "gps_longitude": 121.52000,
         "fields": {
-            "pm25":        {"base": 35.0, "noise": 15.0, "drift_period": 0},
-            "pm10":        {"base": 50.0, "noise": 20.0, "drift_period": 0},
-            "co2":         {"base": 450.0, "noise": 50.0, "drift_period": 120},
-            "temperature": {"base": 24.0, "noise": 1.5, "drift_period": 60},
-            "humidity":    {"base": 50.0, "noise": 6.0, "drift_period": 100},
+            "temperature": {"base": 29.0, "noise": 2.5, "drift_period": 55},
+            "humidity":    {"base": 68.0, "noise": 7.0, "drift_period": 110},
+            "battery":     {"base": 90.0, "noise": 0.4, "drift_period": 3600},
+            "lux":         {"base": 500.0, "noise": 60.0, "drift_period": 35},
+            "mag":         {"base": 1.05, "noise": 0.06, "drift_period": 0},
         },
     },
 }
@@ -115,6 +123,8 @@ class DeviceSimulator:
         self.name = config["name"]
         self.type = config["type"]
         self.fields = config["fields"]
+        self.gps_latitude = config.get("gps_latitude")
+        self.gps_longitude = config.get("gps_longitude")
         self.tick = 0
 
     def generate_telemetry(self) -> dict:
@@ -136,6 +146,17 @@ class DeviceSimulator:
 
             data[field_name] = round(value, 2)
 
+        if self.gps_latitude is not None:
+            data["gps_latitude"] = round(self.gps_latitude + random.gauss(0, 0.0001), 5)
+            data["gps_longitude"] = round(self.gps_longitude + random.gauss(0, 0.0001), 5)
+            data["gps_altitude"] = round(13.6 + random.gauss(0, 0.5), 1)
+            data["gps_speed"] = round(abs(random.gauss(3.1, 1.0)), 1)
+            data["gps_cog"] = round(random.uniform(0, 360), 1)
+            data["gps_hdop"] = round(3.2 + random.gauss(0, 0.3), 1)
+            data["gps_fix_type"] = 3
+            data["gps_utc_time"] = datetime.now().strftime("%H%M%S.000")
+            data["gps_date"] = datetime.now().strftime("%d%m%y")
+            data["gps_satellites"] = random.randint(4, 12)
         return data
 
     def generate_alert(self) -> dict | None:
@@ -231,7 +252,7 @@ class DeviceMQTTClient:
         self.publish("status", payload)
 
     def send_telemetry(self, data: dict):
-        self.publish("telemetry", data)
+        self.publish("gps", data)
 
     def send_alert(self, alert: dict):
         self.publish("alert", alert)
@@ -260,9 +281,11 @@ def main():
                 "name": did,
                 "type": "generic",
                 "fields": {
-                    "value":        {"base": 50.0, "noise": 10.0, "drift_period": 30},
-                    "temperature":  {"base": 25.0, "noise": 3.0, "drift_period": 60},
-                    "battery":      {"base": 80.0, "noise": 0.5, "drift_period": 3600},
+                    "temperature":  {"base": 28.0, "noise": 2.0, "drift_period": 60},
+                    "humidity":     {"base": 65.0, "noise": 5.0, "drift_period": 120},
+                    "battery":      {"base": 85.0, "noise": 0.5, "drift_period": 3600},
+                    "lux":          {"base": 450.0, "noise": 50.0, "drift_period": 30},
+                    "mag":          {"base": 1.02, "noise": 0.05, "drift_period": 0},
                 },
             })
 

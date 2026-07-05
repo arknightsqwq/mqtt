@@ -54,6 +54,10 @@
         v-else-if="activeTab === 'control'"
         :device-id="deviceId"
       />
+      <DeviceConfig
+        v-else-if="activeTab === 'config'"
+        :device-id="deviceId"
+      />
     </div>
   </div>
 </template>
@@ -62,7 +66,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Odometer, TrendCharts, Bell, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowLeft, Odometer, TrendCharts, Bell, SwitchButton, Setting } from '@element-plus/icons-vue'
 import { useDevicesStore } from '@/stores/devices'
 import { useAuthStore } from '@/stores/auth'
 import { usePolling } from '@/composables/usePolling'
@@ -70,6 +74,7 @@ import DeviceOverview from './DeviceOverview.vue'
 import DeviceData from './DeviceData.vue'
 import DeviceAlerts from './DeviceAlerts.vue'
 import DeviceControl from './DeviceControl.vue'
+import DeviceConfig from './DeviceConfig.vue'
 import type { DeviceSummary } from '@/types'
 
 const route = useRoute()
@@ -85,7 +90,8 @@ const tabs = [
   { key: 'overview', label: '概览', icon: Odometer },
   { key: 'data', label: '数据', icon: TrendCharts },
   { key: 'alerts', label: '告警', icon: Bell },
-  { key: 'control', label: '控制', icon: SwitchButton }
+  { key: 'control', label: '控制', icon: SwitchButton },
+  { key: 'config', label: '配置', icon: Setting }
 ]
 
 const deviceName = computed(() => device.value?.device_name || deviceId.value)

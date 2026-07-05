@@ -12,14 +12,28 @@
         <span class="alert-time">{{ formatTime(alert.upload_time) }}</span>
       </div>
       <p class="alert-message">{{ parsedMessage }}</p>
+      <!-- 录音播放 -->
+      <div v-if="recordingId" class="alert-recording">
+        <el-button
+          :icon="playing ? VideoPause : Headset"
+          :type="playing ? 'danger' : 'success'"
+          size="small"
+          round
+          :loading="loadingAudio"
+          @click.stop="togglePlay"
+        >
+          {{ playing ? '停止' : '播放录音' }}
+        </el-button>
+      </div>
     </div>
     <el-icon :size="14" class="alert-arrow"><ArrowRight /></el-icon>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { WarningFilled, Bell, ArrowRight } from '@element-plus/icons-vue'
+import { computed, ref } from 'vue'
+import { WarningFilled, Bell, ArrowRight, Headset, VideoPause } from '@element-plus/icons-vue'
+import { fetchRecording } from '@/api/device'
 import type { AlertItemData } from '@/types'
 
 const props = defineProps<{
@@ -30,12 +44,25 @@ defineEmits<{
   click: []
 }>()
 
+const playing = ref(false)
+const loadingAudio = ref(false)
+let audio: HTMLAudioElement | null = null
+
 const severity = computed(() => {
   try {
     const obj = JSON.parse(props.alert.raw_json)
     return obj.severity || obj.level || 'normal'
   } catch {
     return 'normal'
+  }
+})
+
+const recordingId = computed(() => {
+  try {
+    const obj = JSON.parse(props.alert.raw_json)
+    return obj.recording_db_id ?? null
+  } catch {
+    return null
   }
 })
 
@@ -56,6 +83,29 @@ function formatTime(time: string) {
   if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前'
   if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前'
   return time.substring(5, 16)
+}
+
+async function togglePlay() {
+  if (playing.value) {
+    audio?.pause()
+    audio = null
+    playing.value = false
+    return
+  }
+  if (!recordingId.value) return
+  loadingAudio.value = true
+  try {
+    const blob = await fetchRecording(props.alert.device_id, recordingId.value)
+    const url = URL.createObjectURL(blob)
+    audio = new Audio(url)
+    audio.onended = () => { playing.value = false; audio = null }
+    await audio.play()
+    playing.value = true
+  } catch {
+    // ignore
+  } finally {
+    loadingAudio.value = false
+  }
 }
 </script>
 
@@ -130,6 +180,10 @@ function formatTime(time: string) {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.alert-recording {
+  margin-top: 8px;
 }
 
 .alert-arrow {

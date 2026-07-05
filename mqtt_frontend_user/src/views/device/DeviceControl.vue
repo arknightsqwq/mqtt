@@ -16,7 +16,7 @@
         v-model="command"
         type="textarea"
         :rows="4"
-        placeholder="请输入指令内容（JSON 格式或纯文本），具体格式取决于目标设备"
+        placeholder='请输入指令内容（JSON 格式），如 {"cmd": "reboot", "params": {"delay": 5}}'
         size="large"
       />
       <el-button
@@ -75,6 +75,14 @@ const history = ref<{ command: string; time: string }[]>([])
 async function handleSend() {
   if (!command.value.trim()) {
     ElMessage.warning('请输入指令内容')
+    return
+  }
+
+  // JSON 校验
+  try {
+    JSON.parse(command.value.trim())
+  } catch {
+    ElMessage.warning('指令内容必须是合法 JSON')
     return
   }
 

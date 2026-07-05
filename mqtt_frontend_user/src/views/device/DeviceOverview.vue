@@ -1,5 +1,5 @@
 <template>
-  <div class="overview">
+  <div class="overview has-map">
     <!-- 在线状态横幅 -->
     <div class="status-banner" :class="device?.is_online ? 'online' : 'offline'">
       <span class="status-dot" :class="device?.is_online ? 'online' : 'offline'" />
@@ -11,59 +11,74 @@
       </div>
     </div>
 
-    <!-- 统计卡片 -->
-    <div v-if="parsedFields.length" class="stat-grid">
-      <StatCard
-        v-for="(f, i) in parsedFields"
-        :key="f.key"
-        :value="f.value"
-        :label="f.key"
-        :bg="statColors[i % statColors.length]"
-      />
-    </div>
+    <!-- 有地图时左右分栏，无地图时竖向排列 -->
+    <div class="content-area">
+      <div class="left-col">
+        <!-- 统计卡片 -->
+        <div v-if="parsedFields.length" class="stat-grid">
+          <StatCard
+            v-for="(f, i) in parsedFields"
+            :key="f.key"
+            :value="f.value"
+            :label="f.key"
+            :bg="statColors[i % statColors.length]"
+          />
+        </div>
 
-    <!-- 无数据提示 -->
-    <div v-else class="no-data-card">
-      <el-icon :size="32" color="var(--text-muted)"><Warning /></el-icon>
-      <p>暂无遥测数据</p>
-      <span class="hint">等待设备上报数据...</span>
-    </div>
+        <!-- 无数据提示 -->
+        <div v-else class="no-data-card">
+          <el-icon :size="32" color="var(--text-muted)"><Warning /></el-icon>
+          <p>暂无遥测数据</p>
+          <span class="hint">等待设备上报数据...</span>
+        </div>
 
-    <!-- 设备信息 -->
-    <div class="info-section">
-      <h3>设备信息</h3>
-      <div class="info-row">
-        <span class="info-label">设备 ID</span>
-        <span class="info-value">{{ device?.device_id }}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">设备名称</span>
-        <span class="info-value">{{ device?.device_name }}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">在线状态</span>
-        <el-tag :type="device?.is_online ? 'success' : 'info'" size="small">
-          {{ device?.is_online ? '在线' : '离线' }}
-        </el-tag>
-      </div>
-      <div v-if="device?.last_online_time" class="info-row">
-        <span class="info-label">最后上线</span>
-        <span class="info-value">{{ device.last_online_time }}</span>
-      </div>
-    </div>
+        <!-- 设备信息 -->
+        <div class="info-section">
+          <h3>设备信息</h3>
+          <div class="info-row">
+            <span class="info-label">设备 ID</span>
+            <span class="info-value">{{ device?.device_id }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">设备名称</span>
+            <span class="info-value">{{ device?.device_name }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">在线状态</span>
+            <el-tag :type="device?.is_online ? 'success' : 'info'" size="small">
+              {{ device?.is_online ? '在线' : '离线' }}
+            </el-tag>
+          </div>
+          <div v-if="device?.last_online_time" class="info-row">
+            <span class="info-label">最后上线</span>
+            <span class="info-value">{{ device.last_online_time }}</span>
+          </div>
+        </div>
 
-    <!-- 解绑按钮 -->
-    <div class="danger-zone">
-      <el-button
-        type="danger"
-        plain
-        size="large"
-        :icon="Delete"
-        class="unbind-btn"
-        @click="handleUnbind"
-      >
-        解绑此设备
-      </el-button>
+        <!-- 解绑按钮 -->
+        <div class="danger-zone">
+          <el-button
+            type="danger"
+            plain
+            size="large"
+            :icon="Delete"
+            class="unbind-btn"
+            @click="handleUnbind"
+          >
+            解绑此设备
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 设备位置 -->
+      <div class="map-section">
+        <h3>设备位置</h3>
+        <DeviceMap
+          :latitude="deviceLat ?? 0"
+          :longitude="deviceLng ?? 0"
+          :device-name="device?.device_name || deviceId"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -74,6 +89,7 @@ import { ElMessageBox } from 'element-plus'
 import { Warning, Delete } from '@element-plus/icons-vue'
 import { useDevicesStore } from '@/stores/devices'
 import StatCard from '@/components/StatCard.vue'
+import DeviceMap from '@/components/DeviceMap.vue'
 import type { DeviceSummary } from '@/types'
 
 const props = defineProps<{
@@ -114,6 +130,31 @@ const parsedFields = computed(() => {
   }
 })
 
+/** 从 latest_raw 提取经纬度 */
+const deviceLat = computed(() => {
+  if (!props.device?.latest_raw) return null
+  try {
+    const obj = JSON.parse(props.device.latest_raw)
+    const lat = obj.gps_latitude ?? obj.latitude ?? obj.lat
+    return typeof lat === 'number' ? lat : null
+  } catch {
+    return null
+  }
+})
+
+const deviceLng = computed(() => {
+  if (!props.device?.latest_raw) return null
+  try {
+    const obj = JSON.parse(props.device.latest_raw)
+    const lng = obj.gps_longitude ?? obj.longitude ?? obj.lng ?? obj.lon
+    return typeof lng === 'number' ? lng : null
+  } catch {
+    return null
+  }
+})
+
+const hasMap = computed(() => deviceLat.value != null && deviceLng.value != null)
+
 async function handleUnbind() {
   try {
     await ElMessageBox.confirm(
@@ -134,6 +175,51 @@ async function handleUnbind() {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+}
+
+/* 有地图时左右分栏 */
+.content-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.has-map .content-area {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.left-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.has-map .left-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.map-section {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.has-map .map-section {
+  flex: 1;
+  min-width: 0;
+  position: sticky;
+  top: 80px;
+}
+
+.map-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
 }
 
 .status-banner {

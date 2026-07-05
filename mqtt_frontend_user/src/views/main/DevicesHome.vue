@@ -98,13 +98,14 @@ async function handleBind() {
     await devicesStore.bindDevice(bindForm.device_id)
     ElMessage.success('设备绑定成功')
     showBindDialog.value = false
+    const boundId = bindForm.device_id
     bindForm.device_id = ''
+    const device = await devicesStore.fetchOneDevice(boundId)
     authStore.bindDevices.push({
-      device_id: bindForm.device_id,
-      device_name: bindForm.device_id,
-      device_desc: null
+      device_id: boundId,
+      device_name: device?.device_name || boundId,
+      device_desc: device?.device_desc || null
     })
-    await devicesStore.fetchOneDevice(bindForm.device_id)
   } catch { /* handled by interceptor */ } finally {
     bindLoading.value = false
   }

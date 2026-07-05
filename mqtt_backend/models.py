@@ -32,6 +32,7 @@ class DeviceRegister(BaseModel):
     device_id: str
     device_name: str
     device_desc: str = ""
+    config_json: dict | None = None
 
 
 class DeviceBind(BaseModel):

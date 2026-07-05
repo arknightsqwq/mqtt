@@ -4,7 +4,8 @@
     <div class="filters">
       <el-input v-model="fDevice" placeholder="设备 ID" clearable style="width: 160px" @clear="load" />
       <el-select v-model="fType" placeholder="消息类型" clearable style="width: 140px" @change="load">
-        <el-option label="遥测 (telemetry)" value="telemetry" />
+        <el-option label="GPS 定位 (gps)" value="gps" />
+        <el-option label="慢遥测 (telemetry)" value="telemetry" />
         <el-option label="告警 (alert)" value="alert" />
         <el-option label="状态 (status)" value="status" />
       </el-select>
@@ -82,6 +83,7 @@ const dlg = reactive<{ visible: boolean; row: MessageEntry | null }>({ visible: 
 
 function typeColor(t: string): string {
   if (t === 'alert') return 'danger'
+  if (t === 'gps') return ''
   if (t === 'telemetry') return 'success'
   if (t === 'status') return 'info'
   return ''

@@ -21,6 +21,11 @@ export function sendCommand(data: { device_id: string; command: string }): Promi
   return http.post('/api/device/send_cmd', data)
 }
 
+/** 向设备下发配置 */
+export function sendConfig(data: { device_id: string; command: string }): Promise<ApiResponse> {
+  return http.post('/api/device/send_config', data)
+}
+
 /** 获取设备最新遥测数据 */
 export function getDeviceLatest(deviceId: string): Promise<ApiResponse<DeviceLatest>> {
   return http.get(`/api/device/${deviceId}/latest`)
@@ -37,4 +42,15 @@ export function getDeviceTimeSeries(
 /** 获取所有绑定设备的告警 */
 export function getAlerts(params: { hours: number; limit: number }): Promise<ApiResponse<AlertList>> {
   return http.get('/api/alerts', { params })
+}
+
+/** 获取录音音频 Blob（直接返回二进制流） */
+export async function fetchRecording(deviceId: string, recordingId: number): Promise<Blob> {
+  const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+  const token = localStorage.getItem('user_token') || ''
+  const resp = await fetch(`${base}/api/device/${deviceId}/recording/${recordingId}?fmt=wav`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  if (!resp.ok) throw new Error('获取录音失败')
+  return resp.blob()
 }

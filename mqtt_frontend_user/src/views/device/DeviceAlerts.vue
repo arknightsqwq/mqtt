@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { Loading, CircleCheckFilled } from '@element-plus/icons-vue'
 import { getAlerts } from '@/api/device'
 import AlertItem from '@/components/AlertItem.vue'
@@ -65,6 +65,10 @@ async function loadAlerts() {
 }
 
 watch(() => props.deviceId, () => { alerts.value = []; loadAlerts() }, { immediate: true })
+
+// 每 15 秒轮询刷新告警列表
+const timer = setInterval(loadAlerts, 15000)
+onBeforeUnmount(() => clearInterval(timer))
 </script>
 
 <style scoped>

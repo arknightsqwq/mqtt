@@ -43,12 +43,13 @@ const list = ref<LogEntry[]>([]); const total = ref(0)
 const page = ref(1); const ps = ref(20)
 const fUser = ref(''); const fAction = ref(''); const ld = ref(false)
 
-const actions = ['login', 'register_device', 'delete_device', 'create_user', 'disable_user', 'enable_user', 'reset_pwd']
+const actions = ['login', 'register_device', 'delete_device', 'batch_register_device', 'create_user', 'batch_create_user', 'disable_user', 'enable_user', 'reset_pwd']
 
 function actionLabel(a: string): string {
   const m: Record<string, string> = {
     login: '登录', register_device: '注册设备', delete_device: '删除设备',
-    create_user: '创建用户', disable_user: '禁用用户', enable_user: '启用用户', reset_pwd: '重置密码',
+    batch_register_device: '批量注册设备', create_user: '创建用户', batch_create_user: '批量创建用户',
+    disable_user: '禁用用户', enable_user: '启用用户', reset_pwd: '重置密码',
   }
   return m[a] || a
 }

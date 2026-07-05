@@ -27,6 +27,8 @@ CREATE TABLE `device_info` (
   `device_id`         varchar(50)  NOT NULL COMMENT '设备唯一ID（对应EMQX设备账号）',
   `device_name`       varchar(50)  NOT NULL Comment '设备名称',
   `device_desc`       text         DEFAULT NULL COMMENT '设备描述（安装位置/型号等）',
+  `config_json`       json         DEFAULT NULL COMMENT '设备配置模板定义（控制用户前端配置页表单）',
+  `current_config`    json         DEFAULT NULL COMMENT '设备上报的当前配置值',
   `is_online`         tinyint      NOT NULL DEFAULT 0 COMMENT '0=离线 1=在线',
   `last_online_time`  datetime(3)  DEFAULT NULL COMMENT '最后上线时间',
   `last_offline_time` datetime(3)  DEFAULT NULL COMMENT '最后离线时间',
@@ -62,3 +64,17 @@ CREATE TABLE `device_data` (
   KEY `idx_device_id` (`device_id`),
   CONSTRAINT `fk_data_device` FOREIGN KEY (`device_id`) REFERENCES `device_info` (`device_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备历史数据表';
+
+-- ---------------------------------------------------
+-- 5. 设备录音表
+-- ---------------------------------------------------
+CREATE TABLE `device_recording` (
+  `id`           bigint      NOT NULL AUTO_INCREMENT,
+  `device_id`    varchar(50) NOT NULL COMMENT '关联设备ID',
+  `format`       varchar(10) NOT NULL DEFAULT 'amr' COMMENT '音频格式',
+  `data`         mediumblob  NOT NULL COMMENT '原始音频二进制',
+  `upload_time`  datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '上传时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_recording_device` (`device_id`),
+  CONSTRAINT `fk_recording_device` FOREIGN KEY (`device_id`) REFERENCES `device_info` (`device_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备录音表';

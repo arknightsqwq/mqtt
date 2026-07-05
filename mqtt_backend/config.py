@@ -40,7 +40,7 @@ class Settings:
     # MQTT 订阅主题列表，格式: "topic:qos,topic:qos,..."
     _raw_topics: str = os.getenv(
         "SUBSCRIBE_TOPICS",
-        "device/+/telemetry:1,device/+/alert:2,device/+/status:1,device/+/data:1",
+        "device/+/gps:1,device/+/alert:1,device/+/status:1,device/+/recording:1,device/+/telemetry:1",
     )
 
     @property

@@ -53,6 +53,9 @@ logger = logging.getLogger("mqtt_backend")
 class MQTTClient:
     """全局 MQTT 客户端：订阅设备数据 + 下发指令复用同一连接。"""
 
+    # 缓存每台设备最新慢刷新字段，供快遥测合并
+    _slow_cache: dict = {}
+
     def __init__(self):
         self.client = mqtt.Client(
             client_id=f"backend_{id(self):x}",
@@ -90,16 +93,21 @@ class MQTTClient:
             if len(parts) < 3:
                 return
             device_id = parts[1]
-            subtopic = parts[2]  # "telemetry" | "alert" | "status" | "data" | "cmd" | "config"
+            subtopic = parts[2]  # "gps" | "telemetry" | "alert" | "status" | "recording" | "cmd" | "config"
             if not device_id:
                 return
 
-            # 忽略下行 Topic（虽然默认不会收到自己发的消息，但做防御性过滤）
-            if subtopic in ("cmd", "config"):
+            # 忽略下行 Topic（cmd 由服务器下发，不期望收到回显）
+            if subtopic == "cmd":
+                return
+
+            # 录音为原始二进制 AMR 数据，不解析 JSON
+            if subtopic == "recording":
+                MQTTClient._handle_recording(device_id, msg.payload)
                 return
 
             raw_json = msg.payload.decode("utf-8")
-            logger.info(f"MQTT ← {device_id}/{subtopic}: {raw_json[:100]}")
+            logger.info(f"MQTT ← {device_id}/{subtopic} [{len(msg.payload)}B]: {raw_json[:500]}")
 
             # ── 注册校验 ──
             if not MQTTClient._device_registered(device_id):
@@ -112,11 +120,18 @@ class MQTTClient:
             elif subtopic == "alert":
                 MQTTClient._insert_device_data(device_id, raw_json, "alert")
                 MQTTClient._handle_alert(device_id, raw_json)
-            else:  # telemetry | data（兼容旧版）
-                MQTTClient._insert_device_data(device_id, raw_json, "telemetry")
+            elif subtopic == "gps":
+                MQTTClient._insert_device_data(device_id, raw_json, "gps")
+            elif subtopic == "telemetry":
+                MQTTClient._merge_slow_telemetry(device_id, raw_json)
+            elif subtopic == "config":
+                MQTTClient._handle_config_report(device_id, raw_json)
 
         except Exception as e:
-            logger.error(f"MQTT 消息处理失败: {e}")
+            # 附带原始字节的十六进制尾部，方便排查截断问题
+            raw = msg.payload if isinstance(msg.payload, bytes) else msg.payload.encode()
+            tail_hex = raw[-40:].hex(" ") if len(raw) > 40 else raw.hex(" ")
+            logger.error(f"MQTT 消息处理失败: {e}  |  payload={len(raw)}B  tail_hex=[{tail_hex}]")
 
     # ── 内部方法 ──
     @staticmethod
@@ -132,7 +147,15 @@ class MQTTClient:
 
     @staticmethod
     def _insert_device_data(device_id: str, raw_json: str, message_type: str):
-        """将遥测/告警数据写入 device_data 表。"""
+        """将遥测/告警数据写入 device_data 表。快遥测自动合并慢字段。"""
+        # 快遥测合并缓存的慢字段
+        if message_type == "gps" and device_id in MQTTClient._slow_cache:
+            try:
+                data = json.loads(raw_json)
+                data.update(MQTTClient._slow_cache[device_id])
+                raw_json = json.dumps(data, ensure_ascii=False)
+            except json.JSONDecodeError:
+                pass
         with get_conn() as conn:
             try:
                 with get_cursor(conn, dict_cursor=False) as cursor:
@@ -142,8 +165,60 @@ class MQTTClient:
                         "VALUES (%s, %s, %s, %s)",
                         (device_id, message_type, raw_json, datetime.now()),
                     )
+                    if cursor.rowcount == 0:
+                        # INSERT IGNORE 静默跳过：极可能是非法 JSON
+                        logger.warning(
+                            f"  [{message_type}] {device_id} INSERT IGNORE 跳过！"
+                            f" 可能是非法 JSON (长度={len(raw_json)}): {raw_json[:200]}"
+                        )
+                    else:
+                        logger.info(f"  [{message_type}] {device_id} 已入库")
                 conn.commit()
-                logger.info(f"  [{message_type}] {device_id} 已入库")
+            except Exception:
+                conn.rollback()
+                raise
+
+    @staticmethod
+    def _merge_slow_telemetry(device_id: str, raw_json: str):
+        """将慢刷新字段合并到最近一条遥测记录中，并更新缓存。"""
+        try:
+            slow_data = json.loads(raw_json)
+        except json.JSONDecodeError:
+            logger.warning(f"  telemetry JSON 解析失败: {raw_json[:80]}")
+            return
+        # 更新缓存，后续快遥测自动带上慢字段
+        MQTTClient._slow_cache[device_id] = slow_data
+        with get_conn() as conn:
+            try:
+                with get_cursor(conn, dict_cursor=False) as cursor:
+                    cursor.execute(
+                        "SELECT id, raw_json FROM device_data "
+                        "WHERE device_id=%s AND message_type='gps' "
+                        "ORDER BY upload_time DESC LIMIT 1",
+                        (device_id,),
+                    )
+                    row = cursor.fetchone()
+                    if row:
+                        existing = row[1]
+                        if isinstance(existing, str):
+                            existing = json.loads(existing)
+                        existing.update(slow_data)
+                        cursor.execute(
+                            "UPDATE device_data SET raw_json=%s WHERE id=%s",
+                            (json.dumps(existing, ensure_ascii=False), row[0]),
+                        )
+                        conn.commit()
+                        logger.info(f"  [telemetry] 已合并到遥测 #{row[0]}")
+                    else:
+                        # 尚无遥测记录，单独存一条
+                        cursor.execute(
+                            "INSERT IGNORE INTO device_data "
+                            "(device_id, message_type, raw_json, upload_time) "
+                            "VALUES (%s, 'telemetry', %s, %s)",
+                            (device_id, raw_json, datetime.now()),
+                        )
+                        conn.commit()
+                        logger.info(f"  [telemetry] {device_id} 暂无遥测，单独入库")
             except Exception:
                 conn.rollback()
                 raise
@@ -200,6 +275,81 @@ class MQTTClient:
         except json.JSONDecodeError:
             logger.warning(f"  alert 消息 JSON 解析失败: {raw_json[:80]}")
 
+    @staticmethod
+    def _handle_config_report(device_id: str, raw_json: str):
+        """处理设备上报的当前配置值，存入 current_config 供前端表单初始化。"""
+        try:
+            data = json.loads(raw_json)
+        except json.JSONDecodeError:
+            logger.warning(f"  [config] JSON 解析失败: {raw_json[:80]}")
+            return
+        if not isinstance(data, dict):
+            return
+        # 区分：值里有嵌套对象的是配置模板，扁平的纯值是设备上报
+        has_nested = any(isinstance(v, dict) for v in data.values())
+        if has_nested:
+            return  # 配置模板回显，忽略
+        with get_conn() as conn:
+            try:
+                with get_cursor(conn, dict_cursor=False) as cursor:
+                    cursor.execute(
+                        "UPDATE device_info SET current_config=%s WHERE device_id=%s",
+                        (json.dumps(data, ensure_ascii=False), device_id),
+                    )
+                conn.commit()
+                logger.info(f"  [config] {device_id} 上报当前配置: {raw_json[:200]}")
+            except Exception:
+                conn.rollback()
+                raise
+
+    @staticmethod
+    def _handle_recording(device_id: str, payload: bytes):
+        """处理设备录音（原始 AMR 二进制）。"""
+        if not payload:
+            logger.warning(f"  [recording] {device_id} 空录音，跳过")
+            return
+        with get_conn() as conn:
+            try:
+                with get_cursor(conn, dict_cursor=False) as cursor:
+                    cursor.execute(
+                        "INSERT INTO device_recording "
+                        "(device_id, format, data, upload_time) "
+                        "VALUES (%s, 'amr', %s, %s)",
+                        (device_id, payload, datetime.now()),
+                    )
+                    rec_id = cursor.lastrowid
+                    conn.commit()
+                    logger.info(f"  [recording] {device_id} 录音已入库, id={rec_id}, size={len(payload)}B")
+
+                    # 将 recording_db_id 注入最近一条告警的 raw_json（30 秒时间窗口）
+                    cursor.execute(
+                        "SELECT id, raw_json FROM device_data "
+                        "WHERE device_id=%s AND message_type='alert' "
+                        "AND upload_time >= DATE_SUB(NOW(), INTERVAL 30 SECOND) "
+                        "ORDER BY upload_time DESC LIMIT 1",
+                        (device_id,),
+                    )
+                    row = cursor.fetchone()
+                    if row:
+                        try:
+                            raw = row[1]
+                            if isinstance(raw, str):
+                                raw = json.loads(raw)
+                            raw["recording_db_id"] = rec_id
+                            cursor.execute(
+                                "UPDATE device_data SET raw_json=%s WHERE id=%s",
+                                (json.dumps(raw, ensure_ascii=False), row[0]),
+                            )
+                            conn.commit()
+                            logger.info(f"  [recording] 已将 recording_db_id={rec_id} 注入告警 #{row[0]}")
+                        except Exception:
+                            pass
+                    else:
+                        logger.info(f"  [recording] 30 秒内无告警，跳过关联")
+            except Exception:
+                conn.rollback()
+                raise
+
     # ── 生命周期 ──
     def start(self):
         def _run():
@@ -211,7 +361,11 @@ class MQTTClient:
         logger.info("MQTT 客户端已启动（后台线程）")
 
     def publish_cmd(self, device_id: str, command: str):
-        """下发指令到设备（复用全局连接）。"""
+        """下发指令到设备（复用全局连接），指令须为合法 JSON。"""
+        try:
+            json.loads(command)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="指令格式错误：必须是合法 JSON")
         topic = f"device/{device_id}/cmd"
         result = self.client.publish(topic, command, qos=1)
         if result.rc == mqtt.MQTT_ERR_SUCCESS:
@@ -219,6 +373,21 @@ class MQTTClient:
         else:
             logger.error(f"MQTT 下发失败: rc={result.rc}")
             raise HTTPException(status_code=500, detail="指令下发失败")
+        return result
+
+    def publish_config(self, device_id: str, config: str):
+        """下发配置到设备（复用全局连接），配置须为合法 JSON。"""
+        try:
+            json.loads(config)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="配置格式错误：必须是合法 JSON")
+        topic = f"device/{device_id}/config"
+        result = self.client.publish(topic, config, qos=1)
+        if result.rc == mqtt.MQTT_ERR_SUCCESS:
+            logger.info(f"MQTT → {topic}: {config}")
+        else:
+            logger.error(f"MQTT 下发失败: rc={result.rc}")
+            raise HTTPException(status_code=500, detail="配置下发失败")
         return result
 
 
@@ -488,6 +657,24 @@ def send_device_cmd(
     return {"code": 200, "msg": f"指令已下发到设备 {data.device_id}"}
 
 
+@app.post("/api/device/send_config", summary="下发设备配置")
+def send_device_config(
+    data: DeviceCommand, user_id: str = Depends(get_current_user)
+):
+    with get_conn() as conn:
+        with get_cursor(conn, dict_cursor=False) as cursor:
+            cursor.execute(
+                "SELECT 1 FROM user_device_bind WHERE user_id=%s AND device_id=%s LIMIT 1",
+                (user_id, data.device_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=403, detail="无权限操作该设备")
+
+    mqtt_client.publish_config(data.device_id, data.command)
+    logger.info(f"用户 {user_id} → 设备 {data.device_id} 配置: {data.command}")
+    return {"code": 200, "msg": f"配置已下发到设备 {data.device_id}"}
+
+
 # ═══════════════════════════════════════════════
 # 二、运维端接口（需 X-Admin-Token 头）
 # ═══════════════════════════════════════════════
@@ -505,9 +692,10 @@ def device_register(
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="设备已存在")
             cursor.execute(
-                "INSERT INTO device_info (device_id, device_name, device_desc) "
-                "VALUES (%s, %s, %s)",
-                (data.device_id, data.device_name, data.device_desc),
+                "INSERT INTO device_info (device_id, device_name, device_desc, config_json) "
+                "VALUES (%s, %s, %s, %s)",
+                (data.device_id, data.device_name, data.device_desc,
+                 json.dumps(data.config_json, ensure_ascii=False) if data.config_json else None),
             )
             conn.commit()
     logger.info(f"管理员注册设备: {data.device_id} ({data.device_name})")
@@ -541,6 +729,31 @@ def device_delete(
     logger.info(f"管理员删除设备: {device_id}")
     log_operation("admin", "delete_device", device_id)
     return {"code": 200, "msg": f"设备 {device_id} 已删除"}
+
+
+@app.put("/api/admin/device/{device_id}/config", summary="【运维】更新设备配置模板")
+async def admin_update_device_config(
+    device_id: str,
+    request: Request,
+    _: None = Depends(verify_admin),
+):
+    """更新设备的 config_json 配置模板。"""
+    data = await request.json()
+    with get_conn() as conn:
+        with get_cursor(conn, dict_cursor=False) as cursor:
+            cursor.execute(
+                "SELECT 1 FROM device_info WHERE device_id=%s LIMIT 1", (device_id,)
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="设备不存在")
+            cursor.execute(
+                "UPDATE device_info SET config_json=%s WHERE device_id=%s",
+                (json.dumps(data, ensure_ascii=False), device_id),
+            )
+            conn.commit()
+    logger.info(f"管理员更新设备配置: {device_id}")
+    log_operation("admin", "update_device_config", device_id)
+    return {"code": 200, "msg": f"设备 {device_id} 配置已更新"}
 
 
 @app.post("/api/admin/user/create", summary="【运维】创建用户")
@@ -623,7 +836,7 @@ def admin_list_devices(_: None = Depends(verify_admin)):
     with get_conn() as conn:
         with get_cursor(conn) as cursor:
             cursor.execute(
-                """SELECT di.device_id, di.device_name, di.device_desc,
+                """SELECT di.device_id, di.device_name, di.device_desc, di.config_json,
                           di.is_online, di.last_online_time, di.last_offline_time,
                           COUNT(ub.user_id) AS bind_count
                    FROM device_info di
@@ -654,7 +867,7 @@ def device_latest(device_id: str, user_id: str = Depends(get_current_user)):
 
             cursor.execute(
                 "SELECT di.device_id, di.device_name, di.is_online, "
-                "di.last_online_time, di.last_offline_time "
+                "di.last_online_time, di.last_offline_time, di.config_json, di.current_config "
                 "FROM device_info di WHERE di.device_id=%s",
                 (device_id,),
             )
@@ -662,21 +875,51 @@ def device_latest(device_id: str, user_id: str = Depends(get_current_user)):
             if not info:
                 raise HTTPException(status_code=404, detail="设备不存在")
 
+            # 取最新 telemetry 和最新 gps，合并返回
             cursor.execute(
-                "SELECT raw_json, upload_time, message_type FROM device_data "
+                "SELECT raw_json, upload_time FROM device_data "
                 "WHERE device_id=%s AND message_type='telemetry' "
                 "ORDER BY upload_time DESC LIMIT 1",
                 (device_id,),
             )
-            latest = cursor.fetchone()
+            telem_row = cursor.fetchone()
+            cursor.execute(
+                "SELECT raw_json, upload_time FROM device_data "
+                "WHERE device_id=%s AND message_type='gps' "
+                "ORDER BY upload_time DESC LIMIT 1",
+                (device_id,),
+            )
+            gps_row = cursor.fetchone()
 
     raw = None
     upload_time = None
-    if latest:
-        raw = latest["raw_json"]
-        if isinstance(raw, dict):
-            raw = json.dumps(raw, ensure_ascii=False)
-        upload_time = latest["upload_time"].strftime("%Y-%m-%d %H:%M:%S")
+    if telem_row or gps_row:
+        merged = {}
+        if gps_row:
+            gps_data = gps_row["raw_json"]
+            if isinstance(gps_data, str):
+                gps_data = json.loads(gps_data)
+            merged.update(gps_data)
+        if telem_row:
+            telem_data = telem_row["raw_json"]
+            if isinstance(telem_data, str):
+                telem_data = json.loads(telem_data)
+            merged.update(telem_data)  # telemetry 覆盖同名 gps 字段
+            upload_time = telem_row["upload_time"]
+        else:
+            upload_time = gps_row["upload_time"]
+        raw = json.dumps(merged, ensure_ascii=False)
+        upload_time = upload_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    # 解析 config_json / current_config（MySQL JSON 列可能返回字符串）
+    config_raw = info.get("config_json")
+    if isinstance(config_raw, str):
+        try: config_raw = json.loads(config_raw)
+        except json.JSONDecodeError: config_raw = None
+    current_raw = info.get("current_config")
+    if isinstance(current_raw, str):
+        try: current_raw = json.loads(current_raw)
+        except json.JSONDecodeError: current_raw = None
 
     return {
         "code": 200,
@@ -688,6 +931,8 @@ def device_latest(device_id: str, user_id: str = Depends(get_current_user)):
             "last_offline_time": info["last_offline_time"],
             "latest_raw": raw,
             "latest_time": upload_time,
+            "config_json": config_raw,
+            "current_config": current_raw,
         },
     }
 
@@ -716,7 +961,7 @@ def device_timeseries(
                 "  JSON_UNQUOTE(JSON_EXTRACT(raw_json, CONCAT('$.', %s))) AS val, "
                 "  upload_time "
                 "FROM device_data "
-                "WHERE device_id=%s AND message_type='telemetry' "
+                "WHERE device_id=%s AND message_type='gps' "
                 "  AND upload_time >= DATE_SUB(NOW(), INTERVAL %s HOUR) "
                 "  AND JSON_EXTRACT(raw_json, CONCAT('$.', %s)) IS NOT NULL "
                 "ORDER BY upload_time ASC "
@@ -782,6 +1027,70 @@ def user_alerts(
         })
 
     return {"code": 200, "data": {"alerts": alerts}}
+
+
+@app.get("/api/device/{device_id}/recording/{recording_id}", summary="获取设备录音")
+def device_recording(
+    device_id: str,
+    recording_id: int,
+    fmt: str = "wav",
+    user_id: str = Depends(get_current_user),
+):
+    """获取指定录音的音频流。默认转为 WAV（浏览器可播放），传 fmt=amr 可获取原始 AMR。"""
+    with get_conn() as conn:
+        with get_cursor(conn) as cursor:
+            cursor.execute(
+                "SELECT 1 FROM user_device_bind WHERE user_id=%s AND device_id=%s LIMIT 1",
+                (user_id, device_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=403, detail="无权限访问该设备")
+
+            cursor.execute(
+                "SELECT data, format FROM device_recording WHERE id=%s AND device_id=%s",
+                (recording_id, device_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="录音不存在")
+
+    amr_data = row["data"]
+    from fastapi.responses import Response
+
+    # 浏览器无法播放 AMR，默认用 ffmpeg 转为 WAV
+    if fmt == "amr":
+        return Response(
+            content=amr_data,
+            media_type=f"audio/{row['format']}",
+            headers={"Content-Disposition": f"inline; filename={device_id}_{recording_id}.{row['format']}"},
+        )
+
+    # 转码为 WAV
+    import subprocess, tempfile, os
+    with tempfile.NamedTemporaryFile(suffix=".amr", delete=False) as amr_file:
+        amr_file.write(amr_data)
+        amr_path = amr_file.name
+    wav_path = amr_path + ".wav"
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", amr_path, "-acodec", "pcm_s16le", "-ar", "8000", "-ac", "1",
+             "-f", "wav", wav_path],
+            capture_output=True, timeout=10,
+        )
+        if result.returncode != 0:
+            logger.error(f"AMR→WAV 转码失败: {result.stderr.decode()}")
+            raise HTTPException(status_code=500, detail="音频转码失败")
+        with open(wav_path, "rb") as f:
+            wav_data = f.read()
+        return Response(
+            content=wav_data,
+            media_type="audio/wav",
+            headers={"Content-Disposition": f"inline; filename={device_id}_{recording_id}.wav"},
+        )
+    finally:
+        for p in (amr_path, wav_path):
+            if os.path.exists(p):
+                os.unlink(p)
 
 
 # ═══════════════════════════════════════════════
@@ -1005,7 +1314,7 @@ def admin_overview(_: None = Depends(verify_admin)):
             today_alert = cursor.fetchone()["t"]
             cursor.execute(
                 "SELECT COUNT(*) AS t FROM device_data "
-                "WHERE upload_time >= CURDATE() AND message_type='telemetry'"
+                "WHERE upload_time >= CURDATE() AND message_type='gps'"
             )
             today_telemetry = cursor.fetchone()["t"]
 

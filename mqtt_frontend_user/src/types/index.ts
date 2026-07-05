@@ -91,6 +91,8 @@ export interface DeviceSummary {
   device_id: string
   device_name: string
   device_desc?: string | null
+  config_json?: any | null
+  current_config?: any | null
   is_online: boolean
   last_online_time: string | null
   last_offline_time: string | null

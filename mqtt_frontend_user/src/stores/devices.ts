@@ -6,6 +6,7 @@ import type { DeviceSummary, ApiResponse } from '@/types'
 export const useDevicesStore = defineStore('devices', () => {
   const list = ref<DeviceSummary[]>([])
   const loading = ref(false)
+  const currentConfig = ref<any>(null)
 
   /** 拉取所有绑定设备的最新状态 */
   async function fetchDevices(deviceIds: string[]) {
@@ -61,5 +62,5 @@ export const useDevicesStore = defineStore('devices', () => {
     list.value = list.value.filter(d => d.device_id !== deviceId)
   }
 
-  return { list, loading, fetchDevices, fetchOneDevice, bindDevice, unbindDevice }
+  return { list, loading, currentConfig, fetchDevices, fetchOneDevice, bindDevice, unbindDevice }
 })
