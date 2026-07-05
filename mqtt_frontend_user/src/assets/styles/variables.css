@@ -1,0 +1,61 @@
+:root {
+  /* ===== 主色调（活力橙） ===== */
+  --color-primary: #FF6B35;
+  --color-primary-light: #FF8C52;
+  --color-primary-dark: #E55A2B;
+  --color-primary-bg: #FFF3ED;
+
+  /* ===== 辅助色 ===== */
+  --color-success: #00C48C;
+  --color-success-bg: #E6FFF8;
+  --color-warning: #FFD93D;
+  --color-warning-bg: #FFFBE6;
+  --color-danger: #FF4757;
+  --color-danger-bg: #FFF0F0;
+  --color-info: #2E86DE;
+  --color-info-bg: #E8F4FD;
+
+  /* ===== 渐变色 ===== */
+  --gradient-primary: linear-gradient(135deg, #FF6B35 0%, #FF4757 100%);
+  --gradient-success: linear-gradient(135deg, #00C48C 0%, #00D68F 100%);
+  --gradient-welcome: linear-gradient(135deg, #FF6B35 0%, #FFD93D 100%);
+  --gradient-card: linear-gradient(180deg, #FFFFFF 0%, #F8F9FC 100%);
+
+  /* ===== 背景 ===== */
+  --bg-page: #F0F2F5;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #FAFBFC;
+  --bg-input: #F5F6F8;
+
+  /* ===== 文字 ===== */
+  --text-primary: #1A1A2E;
+  --text-secondary: #6C757D;
+  --text-muted: #ADB5BD;
+  --text-on-gradient: #FFFFFF;
+
+  /* ===== 间距 ===== */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* ===== 圆角 ===== */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* ===== 阴影 ===== */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --shadow-glow-orange: 0 4px 20px rgba(255, 107, 53, 0.25);
+  --shadow-glow-green: 0 4px 20px rgba(0, 196, 140, 0.25);
+
+  /* ===== 字体 ===== */
+  --font-display: 'Noto Sans SC', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
