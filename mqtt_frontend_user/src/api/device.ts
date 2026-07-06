@@ -1,5 +1,5 @@
 import http from './index'
-import type { ApiResponse, DeviceLatest, TimeSeriesData, AlertList, DeviceQueryResult, DeviceQueryParams } from '@/types'
+import type { ApiResponse, DeviceLatest, TimeSeriesData, TrajectoryData, AlertList, DeviceQueryResult, DeviceQueryParams } from '@/types'
 
 /** 绑定设备 */
 export function bindDevice(data: { device_id: string }): Promise<ApiResponse> {
@@ -37,6 +37,14 @@ export function getDeviceTimeSeries(
   params: { field: string; hours: number; limit: number }
 ): Promise<ApiResponse<TimeSeriesData>> {
   return http.get(`/api/device/${deviceId}/timeseries`, { params })
+}
+
+/** 获取设备 GPS 轨迹数据 */
+export function getDeviceTrajectory(
+  deviceId: string,
+  params: { hours: number; limit: number }
+): Promise<ApiResponse<TrajectoryData>> {
+  return http.get(`/api/device/${deviceId}/trajectory`, { params })
 }
 
 /** 获取所有绑定设备的告警 */

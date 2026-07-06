@@ -45,6 +45,7 @@
         v-else-if="activeTab === 'data'"
         :device-id="deviceId"
         :latest-raw="device?.latest_raw"
+        :field-labels="device?.field_labels"
       />
       <DeviceAlerts
         v-else-if="activeTab === 'alerts'"
@@ -58,6 +59,10 @@
         v-else-if="activeTab === 'config'"
         :device-id="deviceId"
       />
+      <DeviceTrajectory
+        v-else-if="activeTab === 'trajectory'"
+        :device-id="deviceId"
+      />
     </div>
   </div>
 </template>
@@ -66,7 +71,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Odometer, TrendCharts, Bell, SwitchButton, Setting } from '@element-plus/icons-vue'
+import { ArrowLeft, Odometer, TrendCharts, Bell, SwitchButton, Setting, Location } from '@element-plus/icons-vue'
 import { useDevicesStore } from '@/stores/devices'
 import { useAuthStore } from '@/stores/auth'
 import { usePolling } from '@/composables/usePolling'
@@ -75,6 +80,7 @@ import DeviceData from './DeviceData.vue'
 import DeviceAlerts from './DeviceAlerts.vue'
 import DeviceControl from './DeviceControl.vue'
 import DeviceConfig from './DeviceConfig.vue'
+import DeviceTrajectory from './DeviceTrajectory.vue'
 import type { DeviceSummary } from '@/types'
 
 const route = useRoute()
@@ -89,6 +95,7 @@ const device = ref<DeviceSummary | null>(null)
 const tabs = [
   { key: 'overview', label: '概览', icon: Odometer },
   { key: 'data', label: '数据', icon: TrendCharts },
+  { key: 'trajectory', label: '轨迹', icon: Location },
   { key: 'alerts', label: '告警', icon: Bell },
   { key: 'control', label: '控制', icon: SwitchButton },
   { key: 'config', label: '配置', icon: Setting }

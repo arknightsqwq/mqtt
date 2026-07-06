@@ -14,16 +14,23 @@
     <!-- 有地图时左右分栏，无地图时竖向排列 -->
     <div class="content-area">
       <div class="left-col">
-        <!-- 统计卡片 -->
-        <div v-if="parsedFields.length" class="stat-grid">
-          <StatCard
-            v-for="(f, i) in parsedFields"
-            :key="f.key"
-            :value="f.value"
-            :label="f.key"
-            :bg="statColors[i % statColors.length]"
-          />
-        </div>
+        <!-- 统计卡片（按分组，同组放在一张卡片内） -->
+        <template v-if="groupEntries.length">
+          <div
+            v-for="[groupName, fields] in groupEntries"
+            :key="groupName"
+            class="stat-group-card"
+            :style="{ borderLeftColor: groupColor(groupName), backgroundColor: groupColor(groupName) + '36' }"
+          >
+            <h3 class="group-title">{{ groupName }}</h3>
+            <div class="stat-group-fields">
+              <div v-for="f in fields" :key="f.key" class="stat-group-item">
+                <span class="stat-group-value">{{ f.value }}</span>
+                <span class="stat-group-label">{{ getLabel(f.key) }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
 
         <!-- 无数据提示 -->
         <div v-else class="no-data-card">
@@ -88,9 +95,27 @@ import { computed } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { Warning, Delete } from '@element-plus/icons-vue'
 import { useDevicesStore } from '@/stores/devices'
-import StatCard from '@/components/StatCard.vue'
+import { useFieldLabel } from '@/composables/useFieldLabel'
+import { FIELD_GROUPS, DEFAULT_GROUP } from '@/constants/fieldGroups'
 import DeviceMap from '@/components/DeviceMap.vue'
 import type { DeviceSummary } from '@/types'
+
+const { translate } = useFieldLabel()
+function getLabel(key: string) { return translate(props.device?.field_labels, key) }
+
+/**
+ * 按分组整理遥测字段。
+ * 返回 Map<分组名, {key, value}[]>，按分组定义顺序排列。
+ */
+function groupFields(fields: { key: string; value: string }[]) {
+  const map = new Map<string, { key: string; value: string }[]>()
+  for (const f of fields) {
+    const group = FIELD_GROUPS[f.key] || DEFAULT_GROUP
+    if (!map.has(group)) map.set(group, [])
+    map.get(group)!.push(f)
+  }
+  return map
+}
 
 const props = defineProps<{
   deviceId: string
@@ -103,15 +128,18 @@ const emit = defineEmits<{
 
 const devicesStore = useDevicesStore()
 
-/** 渐变色背景列表 */
-const statColors = [
-  'var(--gradient-primary)',
-  'var(--gradient-success)',
-  'linear-gradient(135deg, #2E86DE, #54A0FF)',
-  'linear-gradient(135deg, #FF6B6B, #EE5A24)',
-  'linear-gradient(135deg, #8854D0, #A55EEA)',
-  'linear-gradient(135deg, #20BF6B, #26DE81)'
-]
+/** 分组→卡片左侧色条颜色 */
+const GROUP_COLORS: Record<string, string> = {
+  '生命体征': '#FF6B6B',
+  '环境':     '#4A90D9',
+  '位置':     '#20BF6B',
+  '设备':     '#E6A23C',
+  '其他':     '#B0B4C8',
+}
+
+function groupColor(groupName: string): string {
+  return GROUP_COLORS[groupName] || GROUP_COLORS['其他']
+}
 
 /** 从 latest_raw 解析数值字段 */
 const parsedFields = computed(() => {
@@ -128,6 +156,22 @@ const parsedFields = computed(() => {
   } catch {
     return []
   }
+})
+
+/** 已分组且含数据的遥测字段 */
+const groupEntries = computed(() => {
+  const map = groupFields(parsedFields.value)
+  // 按代码中分组定义的顺序：生命体征 → 环境 → 位置 → 设备 → 其他
+  const order = ['生命体征', '环境', '位置', '设备']
+  const sorted = new Map<string, { key: string; value: string }[]>()
+  for (const g of order) {
+    if (map.has(g)) sorted.set(g, map.get(g)!)
+  }
+  // 追加不在 order 列表中的分组
+  for (const [g, fields] of map) {
+    if (!sorted.has(g)) sorted.set(g, fields)
+  }
+  return [...sorted.entries()]
 })
 
 /** 从 latest_raw 提取经纬度 */
@@ -268,10 +312,45 @@ async function handleUnbind() {
   margin-top: 2px;
 }
 
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-sm);
+.stat-group-card {
+  background: var(--bg-card);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  margin-bottom: var(--space-md);
+}
+
+.group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+
+.stat-group-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px 32px;
+}
+
+.stat-group-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-group-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.stat-group-label {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .no-data-card {

@@ -28,6 +28,9 @@ export function deleteDevice(deviceId: string): Promise<ApiResponse> {
 export function updateDeviceConfig(deviceId: string, configJson: any): Promise<ApiResponse> {
   return http.put(`/admin/device/${deviceId}/config`, configJson)
 }
+export function updateDeviceFieldLabels(deviceId: string, fieldLabels: any): Promise<ApiResponse> {
+  return http.put(`/admin/device/${deviceId}/field-labels`, fieldLabels)
+}
 export function queryLogs(params: { page?: number; page_size?: number; user_id?: string; action?: string }): Promise<ApiResponse<{ list: LogEntry[]; total: number }>> {
   return http.get('/admin/logs', { params })
 }

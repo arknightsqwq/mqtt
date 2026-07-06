@@ -1,2 +1,2 @@
 import { defineConfig } from 'vite'; import vue from '@vitejs/plugin-vue'; import { resolve } from 'path'
-export default defineConfig({ plugins: [vue()], resolve: { alias: { '@': resolve(__dirname, 'src') } }, server: { port: 5175, open: true, cors: true } })
+export default defineConfig({ plugins: [vue()], resolve: { alias: { '@': resolve(__dirname, 'src') } }, server: { port: 5175, open: true, cors: true, allowedHosts: ['.starryfrp.com'], proxy: { '/api': { target: 'http://localhost:8000', changeOrigin: true }, '/admin': { target: 'http://localhost:8000/api/admin', changeOrigin: true }, '/device': { target: 'http://localhost:8000/api/device', changeOrigin: true } } } })

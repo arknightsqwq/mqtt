@@ -54,7 +54,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
-  document.title = `${to.meta.title || 'IoT 设备管家'} | IoT 设备管家`
+  document.title = `${to.meta.title || '设备监测系统'} | 设备监测系统`
   const token = localStorage.getItem('user_token')
 
   if (to.meta.guest) {

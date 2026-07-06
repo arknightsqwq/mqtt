@@ -114,6 +114,6 @@ onMounted(() => {
 .alert-list {
   display: flex;
   flex-direction: column;
-  max-width: 720px;
+  gap: var(--space-sm);
 }
 </style>

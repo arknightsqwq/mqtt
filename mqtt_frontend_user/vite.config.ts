@@ -10,6 +10,13 @@ export default defineConfig({
   server: {
     port: 5176,
     open: true,
-    cors: true
+    cors: true,
+    allowedHosts: ['.starryfrp.com'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      }
+    }
   }
 })

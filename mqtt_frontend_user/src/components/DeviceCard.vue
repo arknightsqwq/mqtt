@@ -18,7 +18,7 @@
       <div v-if="latestFields.length" class="data-snapshot">
         <div v-for="f in latestFields.slice(0, 3)" :key="f.key" class="snapshot-item">
           <span class="snapshot-value">{{ f.value }}</span>
-          <span class="snapshot-label">{{ f.key }}</span>
+          <span class="snapshot-label">{{ getLabel(f.key) }}</span>
         </div>
       </div>
       <div v-else class="data-snapshot empty">
@@ -39,7 +39,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
+import { useFieldLabel } from '@/composables/useFieldLabel'
 import type { DeviceSummary } from '@/types'
+
+const { translate } = useFieldLabel()
+function getLabel(key: string) { return translate(props.device.field_labels, key) }
 
 const props = defineProps<{
   device: DeviceSummary

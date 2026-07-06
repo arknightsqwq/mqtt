@@ -10,7 +10,7 @@
           <div class="avatar">{{ authStore.userId.charAt(0).toUpperCase() }}</div>
           <div class="info-text">
             <h2>{{ authStore.userId }}</h2>
-            <p>IoT 设备管家用户</p>
+            <p>设备监测系统用户</p>
           </div>
         </div>
 

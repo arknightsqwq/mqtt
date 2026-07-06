@@ -3,7 +3,7 @@
     <aside class="sidebar">
       <div class="brand" @click="$router.push('/devices')">
         <span class="brand-dot"></span>
-        <span class="brand-text">IoT 设备管家</span>
+        <span class="brand-text">设备监测系统</span>
       </div>
 
       <nav class="sidebar-nav">

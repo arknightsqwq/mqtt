@@ -28,6 +28,7 @@ CREATE TABLE `device_info` (
   `device_name`       varchar(50)  NOT NULL Comment '设备名称',
   `device_desc`       text         DEFAULT NULL COMMENT '设备描述（安装位置/型号等）',
   `config_json`       json         DEFAULT NULL COMMENT '设备配置模板定义（控制用户前端配置页表单）',
+  `field_labels`      json         DEFAULT NULL COMMENT '遥测字段中文映射: {"temperature":"温度","humidity":"湿度",...}',
   `current_config`    json         DEFAULT NULL COMMENT '设备上报的当前配置值',
   `is_online`         tinyint      NOT NULL DEFAULT 0 COMMENT '0=离线 1=在线',
   `last_online_time`  datetime(3)  DEFAULT NULL COMMENT '最后上线时间',

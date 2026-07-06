@@ -54,7 +54,21 @@ class MQTTClient:
     """全局 MQTT 客户端：订阅设备数据 + 下发指令复用同一连接。"""
 
     # 缓存每台设备最新慢刷新字段，供快遥测合并
+    # value: (data_dict, timestamp) —— timestamp 用于 TTL 过期清理
     _slow_cache: dict = {}
+    _CACHE_TTL = 300  # 缓存过期时间（秒），5 分钟内无遥测上报视为过期
+
+    @staticmethod
+    def _clean_stale_cache():
+        """清理过期的慢遥测缓存条目"""
+        now = time.time()
+        stale = [
+            did for did, (_, ts) in MQTTClient._slow_cache.items()
+            if now - ts > MQTTClient._CACHE_TTL
+        ]
+        for did in stale:
+            del MQTTClient._slow_cache[did]
+            logger.info(f"  [cache] 清理过期缓存: {did}")
 
     def __init__(self):
         self.client = mqtt.Client(
@@ -148,14 +162,19 @@ class MQTTClient:
     @staticmethod
     def _insert_device_data(device_id: str, raw_json: str, message_type: str):
         """将遥测/告警数据写入 device_data 表。快遥测自动合并慢字段。"""
-        # 快遥测合并缓存的慢字段
+        # 快遥测合并缓存的慢字段（过期则跳过）
         if message_type == "gps" and device_id in MQTTClient._slow_cache:
-            try:
-                data = json.loads(raw_json)
-                data.update(MQTTClient._slow_cache[device_id])
-                raw_json = json.dumps(data, ensure_ascii=False)
-            except json.JSONDecodeError:
-                pass
+            slow_data, ts = MQTTClient._slow_cache[device_id]
+            if time.time() - ts > MQTTClient._CACHE_TTL:
+                del MQTTClient._slow_cache[device_id]
+                logger.info(f"  [cache] {device_id} 缓存已过期，跳过合并")
+            else:
+                try:
+                    data = json.loads(raw_json)
+                    data.update(slow_data)
+                    raw_json = json.dumps(data, ensure_ascii=False)
+                except json.JSONDecodeError:
+                    pass
         with get_conn() as conn:
             try:
                 with get_cursor(conn, dict_cursor=False) as cursor:
@@ -186,8 +205,9 @@ class MQTTClient:
         except json.JSONDecodeError:
             logger.warning(f"  telemetry JSON 解析失败: {raw_json[:80]}")
             return
-        # 更新缓存，后续快遥测自动带上慢字段
-        MQTTClient._slow_cache[device_id] = slow_data
+        # 更新缓存（带时间戳），后续快遥测自动带上慢字段
+        MQTTClient._slow_cache[device_id] = (slow_data, time.time())
+        MQTTClient._clean_stale_cache()  # 顺便清理其他过期条目
         with get_conn() as conn:
             try:
                 with get_cursor(conn, dict_cursor=False) as cursor:
@@ -692,10 +712,11 @@ def device_register(
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="设备已存在")
             cursor.execute(
-                "INSERT INTO device_info (device_id, device_name, device_desc, config_json) "
-                "VALUES (%s, %s, %s, %s)",
+                "INSERT INTO device_info (device_id, device_name, device_desc, config_json, field_labels) "
+                "VALUES (%s, %s, %s, %s, %s)",
                 (data.device_id, data.device_name, data.device_desc,
-                 json.dumps(data.config_json, ensure_ascii=False) if data.config_json else None),
+                 json.dumps(data.config_json, ensure_ascii=False) if data.config_json else None,
+                 json.dumps(data.field_labels, ensure_ascii=False) if data.field_labels else None),
             )
             conn.commit()
     logger.info(f"管理员注册设备: {data.device_id} ({data.device_name})")
@@ -754,6 +775,31 @@ async def admin_update_device_config(
     logger.info(f"管理员更新设备配置: {device_id}")
     log_operation("admin", "update_device_config", device_id)
     return {"code": 200, "msg": f"设备 {device_id} 配置已更新"}
+
+
+@app.put("/api/admin/device/{device_id}/field-labels", summary="【运维】更新设备字段标签")
+async def admin_update_device_field_labels(
+    device_id: str,
+    request: Request,
+    _: None = Depends(verify_admin),
+):
+    """更新设备的 field_labels 遥测字段中文映射。"""
+    data = await request.json()
+    with get_conn() as conn:
+        with get_cursor(conn, dict_cursor=False) as cursor:
+            cursor.execute(
+                "SELECT 1 FROM device_info WHERE device_id=%s LIMIT 1", (device_id,)
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="设备不存在")
+            cursor.execute(
+                "UPDATE device_info SET field_labels=%s WHERE device_id=%s",
+                (json.dumps(data, ensure_ascii=False), device_id),
+            )
+            conn.commit()
+    logger.info(f"管理员更新设备字段标签: {device_id}")
+    log_operation("admin", "update_device_field_labels", device_id)
+    return {"code": 200, "msg": f"设备 {device_id} 字段标签已更新"}
 
 
 @app.post("/api/admin/user/create", summary="【运维】创建用户")
@@ -837,6 +883,7 @@ def admin_list_devices(_: None = Depends(verify_admin)):
         with get_cursor(conn) as cursor:
             cursor.execute(
                 """SELECT di.device_id, di.device_name, di.device_desc, di.config_json,
+                          di.field_labels,
                           di.is_online, di.last_online_time, di.last_offline_time,
                           COUNT(ub.user_id) AS bind_count
                    FROM device_info di
@@ -867,7 +914,8 @@ def device_latest(device_id: str, user_id: str = Depends(get_current_user)):
 
             cursor.execute(
                 "SELECT di.device_id, di.device_name, di.is_online, "
-                "di.last_online_time, di.last_offline_time, di.config_json, di.current_config "
+                "di.last_online_time, di.last_offline_time, di.config_json, di.current_config, "
+                "di.field_labels "
                 "FROM device_info di WHERE di.device_id=%s",
                 (device_id,),
             )
@@ -911,7 +959,7 @@ def device_latest(device_id: str, user_id: str = Depends(get_current_user)):
         raw = json.dumps(merged, ensure_ascii=False)
         upload_time = upload_time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # 解析 config_json / current_config（MySQL JSON 列可能返回字符串）
+    # 解析 config_json / current_config / field_labels（MySQL JSON 列可能返回字符串）
     config_raw = info.get("config_json")
     if isinstance(config_raw, str):
         try: config_raw = json.loads(config_raw)
@@ -920,6 +968,10 @@ def device_latest(device_id: str, user_id: str = Depends(get_current_user)):
     if isinstance(current_raw, str):
         try: current_raw = json.loads(current_raw)
         except json.JSONDecodeError: current_raw = None
+    field_labels = info.get("field_labels")
+    if isinstance(field_labels, str):
+        try: field_labels = json.loads(field_labels)
+        except json.JSONDecodeError: field_labels = None
 
     return {
         "code": 200,
@@ -933,6 +985,7 @@ def device_latest(device_id: str, user_id: str = Depends(get_current_user)):
             "latest_time": upload_time,
             "config_json": config_raw,
             "current_config": current_raw,
+            "field_labels": field_labels,
         },
     }
 
@@ -982,6 +1035,64 @@ def device_timeseries(
         })
 
     return {"code": 200, "data": {"device_id": device_id, "field": field, "points": points}}
+
+
+@app.get("/api/device/{device_id}/trajectory", summary="设备GPS轨迹数据")
+def device_trajectory(
+    device_id: str,
+    hours: float = 24,
+    limit: int = 2000,
+    user_id: str = Depends(get_current_user),
+):
+    """返回设备指定时间范围内的GPS轨迹点（lat/lng/speed/alt/time），用于地图轨迹回放。"""
+    with get_conn() as conn:
+        with get_cursor(conn) as cursor:
+            cursor.execute(
+                "SELECT 1 FROM user_device_bind WHERE user_id=%s AND device_id=%s LIMIT 1",
+                (user_id, device_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=403, detail="无权限访问该设备")
+
+            cursor.execute(
+                "SELECT raw_json, upload_time "
+                "FROM device_data "
+                "WHERE device_id=%s AND message_type='gps' "
+                "  AND upload_time >= DATE_SUB(NOW(), INTERVAL %s HOUR) "
+                "ORDER BY upload_time ASC "
+                "LIMIT %s",
+                (device_id, hours, limit),
+            )
+            rows = cursor.fetchall()
+
+    points = []
+    for r in rows:
+        try:
+            data = r["raw_json"]
+            if isinstance(data, str):
+                data = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+
+        lat = data.get("gps_latitude") or data.get("latitude") or data.get("lat")
+        lng = data.get("gps_longitude") or data.get("longitude") or data.get("lng") or data.get("lon")
+        if lat is None or lng is None:
+            continue
+
+        speed = data.get("gps_speed_kmh") or data.get("gps_speed_knot") or data.get("gps_speed") or data.get("speed")
+        alt = data.get("gps_altitude") or data.get("altitude") or data.get("alt")
+        cog = data.get("gps_cog") or data.get("cog")
+
+        points.append({
+            "time": r["upload_time"].strftime("%Y-%m-%d %H:%M:%S"),
+            "lat": float(lat),
+            "lng": float(lng),
+            "speed": round(float(speed), 1) if speed is not None else None,
+            "alt": round(float(alt), 1) if alt is not None else None,
+            "cog": round(float(cog), 1) if cog is not None else None,
+        })
+
+    return {"code": 200, "data": {"device_id": device_id, "points": points}}
 
 
 @app.get("/api/alerts", summary="用户告警列表")
@@ -1243,9 +1354,10 @@ def device_batch_register(
                     skipped += 1
                     continue
                 cursor.execute(
-                    "INSERT INTO device_info (device_id, device_name, device_desc) "
-                    "VALUES (%s, %s, %s)",
-                    (d.device_id, d.device_name, d.device_desc),
+                    "INSERT INTO device_info (device_id, device_name, device_desc, field_labels) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (d.device_id, d.device_name, d.device_desc,
+                     json.dumps(d.field_labels, ensure_ascii=False) if d.field_labels else None),
                 )
                 success += 1
             conn.commit()

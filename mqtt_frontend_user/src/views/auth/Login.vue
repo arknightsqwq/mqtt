@@ -9,7 +9,7 @@
         <div class="logo-icon">
           <el-icon :size="36" color="#fff"><Monitor /></el-icon>
         </div>
-        <h1 class="app-name">IoT 设备管家</h1>
+        <h1 class="app-name">设备监测系统</h1>
         <p class="app-tagline">随时随地管理您的设备</p>
       </div>
 

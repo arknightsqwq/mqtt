@@ -15,7 +15,7 @@
           <el-option
             v-for="f in availableFields"
             :key="f"
-            :label="f"
+            :label="getLabel(f)"
             :value="f"
           />
         </el-select>
@@ -47,7 +47,7 @@
     >
       <div class="chart-card-header">
         <span class="chart-dot" :style="{ background: palette[c.colorIdx % palette.length] }" />
-        <span class="chart-field-name">{{ c.field }}</span>
+        <span class="chart-field-name">{{ getLabel(c.field) }}</span>
         <span class="chart-field-unit" v-if="c.field === 'battery'">(%)</span>
         <span class="chart-field-unit" v-else-if="c.field === 'temperature'">(°C)</span>
         <span class="chart-field-unit" v-else-if="c.field === 'humidity' || c.field === 'rssi'">(%)</span>
@@ -57,7 +57,7 @@
       </div>
       <TimeSeriesChart
         :series="[{
-          name: c.field,
+          name: getLabel(c.field),
           points: fieldDataMap[c.field] || [],
           color: palette[c.colorIdx % palette.length]
         }]"
@@ -75,12 +75,17 @@ import { Refresh } from '@element-plus/icons-vue'
 import { getDeviceTimeSeries } from '@/api/device'
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart.vue'
 import { usePolling } from '@/composables/usePolling'
+import { useFieldLabel } from '@/composables/useFieldLabel'
 import type { TimeSeriesPoint } from '@/types'
 
 const props = defineProps<{
   deviceId: string
   latestRaw?: string | null
+  fieldLabels?: Record<string, string> | null
 }>()
+
+const { translate } = useFieldLabel()
+function getLabel(key: string) { return translate(props.fieldLabels, key) }
 
 const palette = [
   '#FF6B35', '#00C48C', '#4A90D9', '#FFD93D',

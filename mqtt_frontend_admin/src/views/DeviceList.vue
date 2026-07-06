@@ -16,10 +16,13 @@
         </template>
       </el-table-column>
       <el-table-column prop="bind_count" label="绑定数" width="90" />
-      <el-table-column label="操作" width="170">
+      <el-table-column label="操作" width="230">
         <template #default="{ row }">
-          <el-button type="warning" size="small" @click="openConfig(row)">配置</el-button>
-          <el-button type="danger" size="small" @click="del(row.device_id)">删除</el-button>
+          <div class="action-btns">
+            <el-button type="warning" size="small" @click="openConfig(row)">配置</el-button>
+            <el-button size="small" @click="openFieldLabels(row)">标签</el-button>
+            <el-button type="danger" size="small" @click="del(row.device_id)">删除</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -38,6 +41,21 @@
         <el-button type="primary" :loading="cfgSaving" @click="saveConfig">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 字段标签编辑弹窗 -->
+    <el-dialog v-model="flVisible" title="编辑字段标签" width="600px" :close-on-click-modal="false">
+      <p style="color:#99a0b8;font-size:13px;margin-bottom:8px">
+        设备：<b>{{ flDeviceId }}</b> — 遥测字段的中文显示名称
+      </p>
+      <el-input v-model="flText" type="textarea" :rows="10"
+        placeholder='JSON 格式，如 {"temperature":"温度","humidity":"湿度","lux":"光照度"}，留空则清除'
+      />
+      <p v-if="flError" style="color:#F56C6C;font-size:12px;margin-top:4px">{{ flError }}</p>
+      <template #footer>
+        <el-button @click="flVisible = false">取消</el-button>
+        <el-button type="primary" :loading="flSaving" @click="saveFieldLabels">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -45,7 +63,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import { listDevices, deleteDevice, updateDeviceConfig } from '@/api/admin'
+import { listDevices, deleteDevice, updateDeviceConfig, updateDeviceFieldLabels } from '@/api/admin'
 import type { DeviceInfo } from '@/types'
 
 const list = ref<DeviceInfo[]>([])
@@ -83,6 +101,37 @@ async function saveConfig() {
   } catch {} finally { cfgSaving.value = false }
 }
 
+// ── 字段标签编辑 ──
+const flVisible = ref(false)
+const flText = ref('')
+const flDeviceId = ref('')
+const flError = ref('')
+const flSaving = ref(false)
+
+function openFieldLabels(row: DeviceInfo) {
+  flDeviceId.value = row.device_id
+  flText.value = row.field_labels ? JSON.stringify(row.field_labels, null, 2) : ''
+  flError.value = ''
+  flVisible.value = true
+}
+
+async function saveFieldLabels() {
+  flError.value = ''
+  let fieldLabels: any = null
+  if (flText.value.trim()) {
+    try { fieldLabels = JSON.parse(flText.value.trim()) }
+    catch { flError.value = 'JSON 格式错误'; return }
+  }
+  flSaving.value = true
+  try {
+    await updateDeviceFieldLabels(flDeviceId.value, fieldLabels || {})
+    const item = list.value.find(d => d.device_id === flDeviceId.value)
+    if (item) (item as any).field_labels = fieldLabels
+    ElMessage.success('字段标签已更新')
+    flVisible.value = false
+  } catch {} finally { flSaving.value = false }
+}
+
 async function load() {
   ld.value = true
   try { const r = await listDevices(); list.value = r.data?.devices || [] } catch {} finally { ld.value = false }
@@ -98,6 +147,11 @@ onMounted(load)
 .page { width: 100% }
 h1 { font-size: 24px; margin: 0 0 16px; color: #e2e6f0 }
 .bar { margin-bottom: 16px }
+.action-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
 </style>
 
 <style>

@@ -53,7 +53,8 @@ const filteredAlerts = computed(() =>
 )
 
 async function loadAlerts() {
-  loading.value = true
+  // 仅在首次加载（无缓存数据）时显示 loading，后续静默刷新避免闪烁
+  if (alerts.value.length === 0) loading.value = true
   try {
     const res = await getAlerts({ hours: hours.value, limit: 200 })
     if (res.code === 200 && res.data) {

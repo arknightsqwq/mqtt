@@ -30,6 +30,7 @@ export interface DeviceLatest {
   last_offline_time: string | null
   latest_raw: string | null
   latest_time: string | null
+  field_labels?: Record<string, string> | null
 }
 
 // ===== 时间序列数据 =====
@@ -86,12 +87,28 @@ export interface DeviceQueryParams {
   page_size?: number
 }
 
+// ===== GPS 轨迹数据 =====
+export interface TrajectoryData {
+  device_id: string
+  points: TrajectoryPoint[]
+}
+
+export interface TrajectoryPoint {
+  time: string
+  lat: number
+  lng: number
+  speed: number | null
+  alt: number | null
+  cog: number | null
+}
+
 // ===== 设备概要（Store 用） =====
 export interface DeviceSummary {
   device_id: string
   device_name: string
   device_desc?: string | null
   config_json?: any | null
+  field_labels?: Record<string, string> | null
   current_config?: any | null
   is_online: boolean
   last_online_time: string | null
