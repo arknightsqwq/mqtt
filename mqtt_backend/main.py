@@ -58,6 +58,9 @@ class MQTTClient:
     _slow_cache: dict = {}
     _CACHE_TTL = 300  # 缓存过期时间（秒），5 分钟内无遥测上报视为过期
 
+    # 头盔设备：强制电量固定为 80%
+    _HELMET_IDS = {"device_001", "device_002", "device_003", "helmet"}
+
     @staticmethod
     def _clean_stale_cache():
         """清理过期的慢遥测缓存条目"""
@@ -127,6 +130,16 @@ class MQTTClient:
             if not MQTTClient._device_registered(device_id):
                 logger.info(f"设备 {device_id} 未注册，跳过")
                 return
+
+            # ── 头盔电量强制 80 ──
+            if subtopic in ("gps", "telemetry") and device_id in MQTTClient._HELMET_IDS:
+                try:
+                    data = json.loads(raw_json)
+                    if "battery" in data:
+                        data["battery"] = 80.0
+                    raw_json = json.dumps(data, ensure_ascii=False)
+                except json.JSONDecodeError:
+                    pass
 
             # ── 按类型分发 ──
             if subtopic == "status":
@@ -1014,7 +1027,7 @@ def device_timeseries(
                 "  JSON_UNQUOTE(JSON_EXTRACT(raw_json, CONCAT('$.', %s))) AS val, "
                 "  upload_time "
                 "FROM device_data "
-                "WHERE device_id=%s AND message_type='gps' "
+                "WHERE device_id=%s AND message_type IN ('gps','telemetry') "
                 "  AND upload_time >= DATE_SUB(NOW(), INTERVAL %s HOUR) "
                 "  AND JSON_EXTRACT(raw_json, CONCAT('$.', %s)) IS NOT NULL "
                 "ORDER BY upload_time ASC "

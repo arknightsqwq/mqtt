@@ -87,20 +87,6 @@ function initChart() {
     }
   })
 
-  // 计算 Y 轴范围（统一所有系列的 min/max，避免切换系列时轴跳动）
-  let yMin = Infinity, yMax = -Infinity
-  for (const s of props.series) {
-    for (const p of s.points) {
-      const v = typeof p.value === 'string' ? parseFloat(p.value) : p.value
-      if (!isNaN(v)) {
-        if (v < yMin) yMin = v
-        if (v > yMax) yMax = v
-      }
-    }
-  }
-  if (!isFinite(yMin)) { yMin = 0; yMax = 100 }
-  const pad = Math.max((yMax - yMin) * 0.08, 1)
-
   // 滑块颜色跟随系列主色
   const sliderColor = props.series[0]?.color || '#FF6B35'
 
@@ -148,9 +134,8 @@ function initChart() {
       splitLine: { show: false }
     },
     yAxis: {
-      type: 'value',
-      min: yMin - pad,
-      max: yMax + pad,
+      type: 'value' as const,
+      scale: true,
       splitLine: { lineStyle: { color: '#f5f5f5', type: 'dashed' as const } },
       axisLabel: { color: '#ADB5BD', fontSize: 11 }
     },
@@ -215,24 +200,10 @@ function mergeSeriesData() {
     }
   })
 
-  // 计算 Y 轴范围
-  let yMin = Infinity, yMax = -Infinity
-  for (const s of props.series) {
-    for (const p of s.points) {
-      const v = typeof p.value === 'string' ? parseFloat(p.value) : p.value
-      if (!isNaN(v)) {
-        if (v < yMin) yMin = v
-        if (v > yMax) yMax = v
-      }
-    }
-  }
-  if (!isFinite(yMin)) { yMin = 0; yMax = 100 }
-  const pad = Math.max((yMax - yMin) * 0.08, 1)
-
   // 只更新数据部分，不触碰 dataZoom/grid/tooltip
   chart.setOption({
     series: echartsSeries,
-    yAxis: { min: yMin - pad, max: yMax + pad },
+    yAxis: { scale: true },
     legend: props.series.length > 1 ? {
       top: 0,
       left: 'center',
