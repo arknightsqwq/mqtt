@@ -109,7 +109,17 @@ async function fetchData() {
   const result = await devicesStore.fetchOneDevice(id)
   // 防止异步返回时路由已切换导致数据错乱
   if (id === route.params.id) {
-    if (result) device.value = result
+    if (result) {
+      device.value = result
+    } else {
+      // fetchOneDevice 返回 null 可能是设备已被管理员删除
+      // 同步服务端绑定关系，若当前设备不在绑定列表中则返回列表页
+      await authStore.refreshBindings()
+      if (!authStore.bindDevices.find(d => d.device_id === id)) {
+        ElMessage.warning('该设备已被管理员删除，无法访问')
+        router.push('/devices')
+      }
+    }
   }
 }
 

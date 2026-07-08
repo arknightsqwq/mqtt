@@ -79,6 +79,8 @@ const bindRules: FormRules = {
 const onlineCount = computed(() => devicesStore.list.filter(d => d.is_online).length)
 
 async function loadDevices() {
+  // 每次轮询先从服务端同步最新的绑定关系（解决管理员后台删设备后本地缓存过期问题）
+  await authStore.refreshBindings()
   if (!authStore.bindDevices.length) return
   const ids = authStore.bindDevices.map(d => d.device_id)
   await devicesStore.fetchDevices(ids)

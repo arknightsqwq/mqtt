@@ -538,6 +538,22 @@ def user_login(data: UserLogin, request: Request):
     }
 
 
+@app.get("/api/user/bindings", summary="获取用户当前绑定设备")
+def user_bindings(user_id: str = Depends(get_current_user)):
+    """获取当前用户的所有设备绑定（从服务端实时查询，避免 localStorage 缓存过期）。"""
+    with get_conn() as conn:
+        with get_cursor(conn) as cursor:
+            cursor.execute(
+                """SELECT ub.device_id, di.device_name, di.device_desc
+                   FROM user_device_bind ub
+                   LEFT JOIN device_info di ON ub.device_id = di.device_id
+                   WHERE ub.user_id=%s""",
+                (user_id,),
+            )
+            bind_devices = cursor.fetchall()
+    return {"code": 200, "data": {"bind_devices": bind_devices}}
+
+
 @app.post("/api/user/logout", summary="用户退出登录")
 def user_logout(user_id: str = Depends(get_current_user)):
     logger.info(f"用户登出: {user_id}")

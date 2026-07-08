@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { login as apiLogin, register as apiRegister, logout as apiLogout } from '@/api/user'
+import { login as apiLogin, register as apiRegister, logout as apiLogout, fetchBindings } from '@/api/user'
 import type { BindDevice } from '@/types'
 
 function loadBindDevices(): BindDevice[] {
@@ -53,5 +53,17 @@ export const useAuthStore = defineStore('auth', () => {
     bindDevices.value = devices
   }
 
-  return { token, userId, bindDevices, isLoggedIn, login, register, logout, setBindDevices }
+  /** 从服务端刷新绑定设备列表，同步 localStorage */
+  async function refreshBindings() {
+    try {
+      const res = await fetchBindings()
+      if (res.code === 200 && res.data) {
+        bindDevices.value = res.data.bind_devices || []
+      }
+    } catch {
+      // 网络异常时保留本地缓存，不覆盖
+    }
+  }
+
+  return { token, userId, bindDevices, isLoggedIn, login, register, logout, setBindDevices, refreshBindings }
 })
