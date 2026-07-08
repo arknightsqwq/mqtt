@@ -1,0 +1,42 @@
+/* 共享数据表格样式（深色主题，全局覆盖 Element Plus） */
+.data-table {
+  width: 100% !important;
+  table-layout: auto !important;
+  background: #212538 !important;
+  border: 1px solid #333852 !important;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.data-table .el-table__header-wrapper {
+  background: #292d43 !important;
+}
+.data-table th.el-table__cell {
+  background: #292d43 !important;
+  color: #b0b4c8 !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  border-bottom: 1px solid #333852 !important;
+  border-right: none !important;
+  padding: 0 !important;
+}
+.data-table th.el-table__cell .cell {
+  padding: 14px 16px !important;
+}
+.data-table td.el-table__cell {
+  background: #212538 !important;
+  color: #e2e6f0 !important;
+  border-bottom: 1px solid #333852 !important;
+  border-right: none !important;
+  padding: 0 !important;
+}
+.data-table td.el-table__cell .cell {
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+}
+.data-table .el-table__body tr:hover > td.el-table__cell {
+  background: #2d324a !important;
+}
+/* 禁止列宽拖动 */
+.data-table .el-table__header .resize-line {
+  display: none !important;
+}

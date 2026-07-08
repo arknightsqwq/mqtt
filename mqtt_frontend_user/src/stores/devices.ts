@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getDeviceLatest, bindDevice as apiBind, unbindDevice as apiUnbind } from '@/api/device'
-import type { DeviceSummary, ApiResponse } from '@/types'
+import type { DeviceSummary, ApiResponse, DeviceConfigTemplate } from '@/types'
 
 export const useDevicesStore = defineStore('devices', () => {
   const list = ref<DeviceSummary[]>([])
   const loading = ref(false)
-  const currentConfig = ref<any>(null)
+  const currentConfig = ref<DeviceConfigTemplate | null>(null)
 
   /** 拉取所有绑定设备的最新状态 */
   async function fetchDevices(deviceIds: string[]) {

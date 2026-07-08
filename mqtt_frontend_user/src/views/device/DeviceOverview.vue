@@ -97,6 +97,7 @@ import { Warning, Delete } from '@element-plus/icons-vue'
 import { useDevicesStore } from '@/stores/devices'
 import { useFieldLabel } from '@/composables/useFieldLabel'
 import { FIELD_GROUPS, DEFAULT_GROUP } from '@/constants/fieldGroups'
+import { GROUP_COLORS } from '@/constants/colors'
 import DeviceMap from '@/components/DeviceMap.vue'
 import type { DeviceSummary } from '@/types'
 
@@ -127,15 +128,6 @@ const emit = defineEmits<{
 }>()
 
 const devicesStore = useDevicesStore()
-
-/** 分组→卡片左侧色条颜色 */
-const GROUP_COLORS: Record<string, string> = {
-  '生命体征': '#FF6B6B',
-  '环境':     '#4A90D9',
-  '位置':     '#20BF6B',
-  '设备':     '#E6A23C',
-  '其他':     '#B0B4C8',
-}
 
 function groupColor(groupName: string): string {
   return GROUP_COLORS[groupName] || GROUP_COLORS['其他']

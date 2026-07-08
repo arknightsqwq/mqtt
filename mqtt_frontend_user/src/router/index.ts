@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { STORAGE_KEYS } from '@/constants/storage'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -55,7 +56,7 @@ const router = createRouter({
 
 router.beforeEach((to, _from, next) => {
   document.title = `${to.meta.title || '设备监测系统'} | 设备监测系统`
-  const token = localStorage.getItem('user_token')
+  const token = localStorage.getItem(STORAGE_KEYS.USER_TOKEN)
 
   if (to.meta.guest) {
     // 已登录用户访问登录/注册页 → 跳转设备页

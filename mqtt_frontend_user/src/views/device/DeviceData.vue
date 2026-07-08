@@ -46,7 +46,7 @@
       class="chart-card"
     >
       <div class="chart-card-header">
-        <span class="chart-dot" :style="{ background: palette[c.colorIdx % palette.length] }" />
+        <span class="chart-dot" :style="{ background: CHART_PALETTE[c.colorIdx % CHART_PALETTE.length] }" />
         <span class="chart-field-name">{{ getLabel(c.field) }}</span>
         <span class="chart-field-unit" v-if="c.field === 'battery'">(%)</span>
         <span class="chart-field-unit" v-else-if="c.field === 'temperature'">(°C)</span>
@@ -59,7 +59,7 @@
         :series="[{
           name: getLabel(c.field),
           points: fieldDataMap[c.field] || [],
-          color: palette[c.colorIdx % palette.length]
+          color: CHART_PALETTE[c.colorIdx % CHART_PALETTE.length]
         }]"
         :smooth="true"
         height="300px"
@@ -87,10 +87,7 @@ const props = defineProps<{
 const { translate } = useFieldLabel()
 function getLabel(key: string) { return translate(props.fieldLabels, key) }
 
-const palette = [
-  '#FF6B35', '#00C48C', '#4A90D9', '#FFD93D',
-  '#FF4757', '#A55EEA', '#2ED573', '#FF6348',
-]
+import { CHART_PALETTE } from '@/constants/colors'
 
 const selectedFields = ref<string[]>([])
 const selectedHours = ref(24)

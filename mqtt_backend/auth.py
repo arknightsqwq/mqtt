@@ -1,12 +1,13 @@
 """
-认证模块 —— JWT 签发/校验 + 管理员权限校验。
-- get_current_user: 从 Authorization: Bearer <token> 中解析 user_id
-- verify_admin:     从 X-Admin-Token 头中校验管理员令牌
+认证模块 —— JWT 签发/校验 + 管理员权限校验 + 设备绑定校验。
+- get_current_user:      从 Authorization: Bearer <token> 中解析 user_id
+- verify_admin:           从 X-Admin-Token 头中校验管理员令牌
+- verify_device_bind:     校验当前用户是否绑定了指定设备（消除 6 处重复代码）
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Header, HTTPException, Depends
+from fastapi import Header, HTTPException, Depends, Path
 from jose import JWTError, jwt
 
 from config import settings
@@ -58,3 +59,39 @@ def verify_admin(x_admin_token: str = Header(None)) -> None:
     """
     if not x_admin_token or x_admin_token != settings.ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="无管理员权限")
+
+
+def verify_device_bind(
+    device_id: str = Path(...),
+    user_id: str = Depends(get_current_user),
+) -> str:
+    """
+    FastAPI 依赖：校验当前用户是否绑定了指定设备（路径参数）。
+    绑定关系不存在时自动抛出 403。
+
+    用法（替代原来的手写 4 行校验）:
+        def my_route(device_id: str, user_id: str = Depends(verify_device_bind)):
+            ...
+    """
+    check_device_bind(device_id, user_id)
+    return user_id
+
+
+def check_device_bind(device_id: str, user_id: str) -> None:
+    """
+    校验用户是否绑定了指定设备（适用于 device_id 在请求体中而非路径参数的场景）。
+    未绑定时抛出 403。
+
+    用法:
+        check_device_bind(data.device_id, user_id)
+    """
+    from database import get_conn, get_cursor
+
+    with get_conn() as conn:
+        with get_cursor(conn, dict_cursor=False) as cursor:
+            cursor.execute(
+                "SELECT 1 FROM user_device_bind WHERE user_id=%s AND device_id=%s LIMIT 1",
+                (user_id, device_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=403, detail="无权限操作该设备")

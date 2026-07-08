@@ -76,8 +76,8 @@ import type { TrajectoryPoint } from '@/types'
 import iconUrl from 'leaflet/dist/images/marker-icon.png'
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-delete (L.Icon.Default.prototype as any)._getIconUrl
+// @ts-expect-error Leaflet 内部属性 _getIconUrl 不在公开类型中
+delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl })
 
 const props = defineProps<{
@@ -95,8 +95,8 @@ const mapRef = ref<HTMLDivElement>()
 const chartRef = ref<HTMLDivElement>()
 let mapInstance: L.Map | null = null
 let trajectoryLine: L.Polyline | null = null
-let startMarker: L.Marker | null = null
-let endMarker: L.Marker | null = null
+let startMarker: L.CircleMarker | null = null
+let endMarker: L.CircleMarker | null = null
 let chartInstance: echarts.ECharts | null = null
 
 const hasData = computed(() => allPoints.value.length > 0)
@@ -310,10 +310,12 @@ function initSpeedChart() {
   }, true)
 
   // 监听 dataZoom 事件，按时间范围过滤地图轨迹点
+  interface DataZoomPayload { start?: number; end?: number; batch?: { start: number; end: number }[] }
   chartInstance.off('dataZoom')
-  chartInstance.on('dataZoom', (params: any) => {
+  chartInstance.on('dataZoom', (params: unknown) => {
     // ECharts dataZoom 事件：用百分比反算时间范围
-    const item = params.batch ? params.batch[0] : params
+    const p = params as DataZoomPayload
+    const item = p.batch ? p.batch[0] : p
     if (!item) return
 
     // start/end 是百分比 (0-100)，可靠；startValue/endValue 在 time 轴上可能缺失

@@ -79,3 +79,20 @@ CREATE TABLE `device_recording` (
   KEY `idx_recording_device` (`device_id`),
   CONSTRAINT `fk_recording_device` FOREIGN KEY (`device_id`) REFERENCES `device_info` (`device_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备录音表';
+
+-- ---------------------------------------------------
+-- 6. 操作日志表
+-- ---------------------------------------------------
+CREATE TABLE IF NOT EXISTS `operation_logs` (
+  `id`         bigint       NOT NULL AUTO_INCREMENT,
+  `user_id`    varchar(50)  DEFAULT NULL COMMENT '操作用户ID',
+  `action`     varchar(50)  NOT NULL COMMENT '操作类型',
+  `target`     varchar(100) DEFAULT NULL COMMENT '操作目标',
+  `detail`     text         DEFAULT NULL COMMENT '操作详情',
+  `ip`         varchar(45)  DEFAULT NULL COMMENT '操作来源IP',
+  `created_at` datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_logs_user` (`user_id`),
+  KEY `idx_logs_action` (`action`),
+  KEY `idx_logs_time` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='操作日志表';

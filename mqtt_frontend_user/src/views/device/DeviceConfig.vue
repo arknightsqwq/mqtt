@@ -81,12 +81,14 @@ import { Promotion, Delete } from '@element-plus/icons-vue'
 import { sendConfig } from '@/api/device'
 import { useDevicesStore } from '@/stores/devices'
 
+import type { ConfigFieldDef, DeviceConfigValues } from '@/types'
+
 interface ConfigField {
   key: string
   label: string
   type: 'text' | 'number' | 'select'
   unit?: string
-  default?: any
+  default?: string | number
   min?: number
   max?: number
   options?: string[]
@@ -98,13 +100,13 @@ const devicesStore = useDevicesStore()
 const sending = ref(false)
 const configText = ref('')
 const history = ref<{ config: string; time: string }[]>([])
-const formValues = reactive<Record<string, any>>({})
+const formValues = reactive<Record<string, string | number>>({})
 
 /** 从 config_json 解析配置项 */
 const configFields = computed<ConfigField[]>(() => {
   const raw = devicesStore.currentConfig
   if (!raw || typeof raw !== 'object') return []
-  return Object.entries(raw).map(([key, def]: [string, any]) => ({
+  return Object.entries(raw).map(([key, def]: [string, ConfigFieldDef]) => ({
     key,
     label: def?.label || key,
     type: def?.type === 'number' ? 'number' : def?.type === 'select' ? 'select' : 'text',
@@ -117,7 +119,7 @@ const configFields = computed<ConfigField[]>(() => {
 })
 
 /** 初始化表单值：优先用设备上报的 current_config，其次用模板 default */
-function initFormValues(currentConfig: Record<string, any> | null) {
+function initFormValues(currentConfig: DeviceConfigValues | null) {
   for (const field of configFields.value) {
     const curVal = currentConfig?.[field.key]
     formValues[field.key] = curVal ?? field.default ?? ''
@@ -126,7 +128,7 @@ function initFormValues(currentConfig: Record<string, any> | null) {
 
 /** 表单模式下发 */
 async function handleSendForm() {
-  const payload: Record<string, any> = {}
+  const payload: Record<string, string | number> = {}
   for (const field of configFields.value) {
     payload[field.key] = formValues[field.key]
   }

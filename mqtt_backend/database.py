@@ -2,8 +2,9 @@
 数据库工具 —— 连接池 + 上下文管理器 + 常用查询封装。
 使用 DBUtils 实现 pymysql 连接池，避免每次请求都新建连接。
 """
+import json as _json
 from contextlib import contextmanager
-from typing import Optional
+from typing import Optional, Any
 
 import pymysql
 from dbutils.pooled_db import PooledDB
@@ -100,6 +101,31 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
+
+
+# ── JSON 列工具：统一处理 MySQL JSON 列返回类型不一致 ──
+
+def json_to_str(value: Any) -> str | None:
+    """dict → JSON 字符串；已是字符串则原样返回；None → None。"""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return _json.dumps(value, ensure_ascii=False)
+    return value
+
+
+def json_to_dict(value: Any) -> dict | list | None:
+    """JSON 字符串 → dict/list；已是 dict/list 则原样返回；None → None。"""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            return _json.loads(value)
+        except _json.JSONDecodeError:
+            return None
+    if isinstance(value, (dict, list)):
+        return value
+    return None
 
 
 # ── 操作日志 ──

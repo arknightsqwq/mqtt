@@ -66,6 +66,12 @@ class Settings:
     # ── 管理员 ──
     ADMIN_TOKEN: str = os.getenv("ADMIN_TOKEN", "admin123")
 
+    # ── 业务常量 ──
+    DEFAULT_USER_PASSWORD: str = os.getenv("DEFAULT_USER_PASSWORD", "123456")
+    HELMET_DEVICE_IDS: set[str] = set(
+        os.getenv("HELMET_DEVICE_IDS", "device_001,device_002,device_003,helmet").split(",")
+    )
+
     # ── 分页 ──
     PAGE_SIZE_MAX: int = int(os.getenv("PAGE_SIZE_MAX", "100"))
 

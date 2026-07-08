@@ -52,10 +52,12 @@ export function getAlerts(params: { hours: number; limit: number }): Promise<Api
   return http.get('/api/alerts', { params })
 }
 
+import { STORAGE_KEYS } from '@/constants/storage'
+
 /** 获取录音音频 Blob（直接返回二进制流） */
 export async function fetchRecording(deviceId: string, recordingId: number): Promise<Blob> {
   const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
-  const token = localStorage.getItem('user_token') || ''
+  const token = localStorage.getItem(STORAGE_KEYS.USER_TOKEN) || ''
   const resp = await fetch(`${base}/api/device/${deviceId}/recording/${recordingId}?fmt=wav`, {
     headers: { Authorization: `Bearer ${token}` }
   })

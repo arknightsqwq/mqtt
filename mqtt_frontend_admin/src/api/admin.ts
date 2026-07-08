@@ -1,5 +1,5 @@
 import http from './index'
-import type { ApiResponse, UserInfo, DeviceInfo, LogEntry } from '@/types'
+import type { ApiResponse, UserInfo, DeviceInfo, LogEntry, DeviceConfigField } from '@/types'
 
 export function adminLogin(token: string): Promise<ApiResponse> {
   return http.get('/admin/users', { headers: { 'X-Admin-Token': token } })
@@ -19,16 +19,19 @@ export function toggleUserStatus(data: { user_id: string; is_disabled: boolean }
 export function listDevices(): Promise<ApiResponse<{ devices: DeviceInfo[] }>> {
   return http.get('/admin/devices')
 }
-export function registerDevice(data: { device_id: string; device_name: string; device_desc?: string; config_json?: any }): Promise<ApiResponse> {
+export function registerDevice(data: {
+  device_id: string; device_name: string; device_desc?: string
+  config_json?: Record<string, DeviceConfigField>
+}): Promise<ApiResponse> {
   return http.post('/device/register', data)
 }
 export function deleteDevice(deviceId: string): Promise<ApiResponse> {
   return http.delete(`/device/${deviceId}`)
 }
-export function updateDeviceConfig(deviceId: string, configJson: any): Promise<ApiResponse> {
+export function updateDeviceConfig(deviceId: string, configJson: Record<string, DeviceConfigField>): Promise<ApiResponse> {
   return http.put(`/admin/device/${deviceId}/config`, configJson)
 }
-export function updateDeviceFieldLabels(deviceId: string, fieldLabels: any): Promise<ApiResponse> {
+export function updateDeviceFieldLabels(deviceId: string, fieldLabels: Record<string, string>): Promise<ApiResponse> {
   return http.put(`/admin/device/${deviceId}/field-labels`, fieldLabels)
 }
 export function queryLogs(params: { page?: number; page_size?: number; user_id?: string; action?: string }): Promise<ApiResponse<{ list: LogEntry[]; total: number }>> {

@@ -1,5 +1,5 @@
 // ===== API 响应封装 =====
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   code: number
   msg: string
   data?: T
@@ -20,6 +20,23 @@ export interface BindDevice {
   device_name: string
   device_desc: string | null
 }
+
+// ===== 设备配置模板 =====
+export interface ConfigFieldDef {
+  label?: string
+  type?: 'text' | 'number' | 'select'
+  unit?: string
+  default?: string | number
+  min?: number
+  max?: number
+  options?: string[]
+}
+
+/** config_json: 设备配置模板定义（字段名 → 字段定义） */
+export type DeviceConfigTemplate = Record<string, ConfigFieldDef>
+
+/** current_config: 设备上报的当前配置值（字段名 → 当前值） */
+export type DeviceConfigValues = Record<string, string | number>
 
 // ===== 设备实时数据 =====
 export interface DeviceLatest {
@@ -107,9 +124,9 @@ export interface DeviceSummary {
   device_id: string
   device_name: string
   device_desc?: string | null
-  config_json?: any | null
+  config_json?: DeviceConfigTemplate | null
   field_labels?: Record<string, string> | null
-  current_config?: any | null
+  current_config?: DeviceConfigValues | null
   is_online: boolean
   last_online_time: string | null
   last_offline_time: string | null

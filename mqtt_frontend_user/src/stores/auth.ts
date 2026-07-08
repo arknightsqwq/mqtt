@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { login as apiLogin, register as apiRegister, logout as apiLogout, fetchBindings } from '@/api/user'
+import { STORAGE_KEYS } from '@/constants/storage'
 import type { BindDevice } from '@/types'
 
 function loadBindDevices(): BindDevice[] {
   try {
-    const raw = localStorage.getItem('bind_devices')
+    const raw = localStorage.getItem(STORAGE_KEYS.BIND_DEVICES)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
@@ -13,12 +14,12 @@ function loadBindDevices(): BindDevice[] {
 }
 
 function saveBindDevices(devices: BindDevice[]) {
-  localStorage.setItem('bind_devices', JSON.stringify(devices))
+  localStorage.setItem(STORAGE_KEYS.BIND_DEVICES, JSON.stringify(devices))
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref(localStorage.getItem('user_token') || '')
-  const userId = ref(localStorage.getItem('user_id') || '')
+  const token = ref(localStorage.getItem(STORAGE_KEYS.USER_TOKEN) || '')
+  const userId = ref(localStorage.getItem(STORAGE_KEYS.USER_ID) || '')
   const bindDevices = ref<BindDevice[]>(loadBindDevices())
 
   const isLoggedIn = computed(() => !!token.value)
@@ -31,8 +32,8 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = res.access_token
     userId.value = res.user_id
     bindDevices.value = res.bind_devices || []
-    localStorage.setItem('user_token', res.access_token)
-    localStorage.setItem('user_id', res.user_id)
+    localStorage.setItem(STORAGE_KEYS.USER_TOKEN, res.access_token)
+    localStorage.setItem(STORAGE_KEYS.USER_ID, res.user_id)
   }
 
   async function register(user_id: string, password: string) {
@@ -44,9 +45,9 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = ''
     userId.value = ''
     bindDevices.value = []
-    localStorage.removeItem('user_token')
-    localStorage.removeItem('user_id')
-    localStorage.removeItem('bind_devices')
+    localStorage.removeItem(STORAGE_KEYS.USER_TOKEN)
+    localStorage.removeItem(STORAGE_KEYS.USER_ID)
+    localStorage.removeItem(STORAGE_KEYS.BIND_DEVICES)
   }
 
   function setBindDevices(devices: BindDevice[]) {

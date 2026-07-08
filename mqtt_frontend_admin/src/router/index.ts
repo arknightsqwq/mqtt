@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { STORAGE_KEYS } from '@/constants/storage'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -23,7 +24,7 @@ const router = createRouter({
 
 router.beforeEach((to, _from, next) => {
   document.title = (to.meta.title as string) || 'IoT 管理后台'
-  const pub = ['/login']; const t = sessionStorage.getItem('admin_token')
+  const pub = ['/login']; const t = sessionStorage.getItem(STORAGE_KEYS.ADMIN_TOKEN)
   if (!t && !pub.includes(to.path)) next('/login')
   else if (t && pub.includes(to.path)) next('/admin')
   else next()

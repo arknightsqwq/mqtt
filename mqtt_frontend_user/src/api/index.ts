@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { STORAGE_KEYS } from '@/constants/storage'
 
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -8,7 +9,7 @@ const http = axios.create({
 
 // 请求拦截器：附加 JWT Bearer token
 http.interceptors.request.use((config) => {
-  const token = localStorage.getItem('user_token')
+  const token = localStorage.getItem(STORAGE_KEYS.USER_TOKEN)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -23,7 +24,7 @@ http.interceptors.response.use(
     ElMessage.error(msg)
     // 401 自动登出
     if (error.response?.status === 401) {
-      localStorage.removeItem('user_token')
+      localStorage.removeItem(STORAGE_KEYS.USER_TOKEN)
       window.location.href = '/login'
     }
     return Promise.reject(error)
